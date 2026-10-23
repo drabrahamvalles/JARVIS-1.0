@@ -1,0 +1,22 @@
+modelo_rapido: "gpt-6-luna"
+modelo_profundo: "gpt-6.1-sol"
+precios_modelos:
+  gpt-6-luna:
+    entrada: 0.10
+    entrada_cache: 0.01
+    escritura_cache: 0.125
+    salida: 0.50
+  gpt-6.1-sol:
+    entrada: 2.00
+    entrada_cache: 0.10
+    escritura_cache: 2.50
+    salida: 10.00
+ciudad: "Monterrey"
+zona_horaria_por_defecto: "America/Monterrey"
+modo_zona_horaria: "automatico"
+razonamiento_rapido: "low"
+razonamiento_profundo: "medium"
+razonamiento_a_fondo: "high"
+max_output_tokens: 1200
+max_output_tokens_cientifico: 4000
+max_rondas_herramientas: 3
