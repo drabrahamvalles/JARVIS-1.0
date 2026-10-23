@@ -25,6 +25,7 @@ class AppConfig(BaseModel):
 
     modelo_rapido: str = Field(min_length=1)
     modelo_profundo: str = Field(min_length=1)
+    terminos_modelo_profundo: tuple[str, ...] = Field(min_length=1)
     precios_modelos: dict[str, ModelPricing]
     ciudad: str = Field(min_length=1)
     zona_horaria_por_defecto: str
@@ -44,6 +45,16 @@ class AppConfig(BaseModel):
         except (ZoneInfoNotFoundError, ValueError) as exc:
             raise ValueError("Se requiere una zona horaria IANA válida") from exc
         return value
+
+    @field_validator("terminos_modelo_profundo")
+    @classmethod
+    def valid_deep_model_terms(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        cleaned = tuple(value.strip() for value in values)
+        if any(not value for value in cleaned):
+            raise ValueError("Los términos del modelo profundo no pueden estar vacíos")
+        if len({value.casefold() for value in cleaned}) != len(cleaned):
+            raise ValueError("Los términos del modelo profundo no pueden repetirse")
+        return cleaned
 
     @model_validator(mode="after")
     def prices_exist_for_selected_models(self) -> Self:

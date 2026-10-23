@@ -1,6 +1,19 @@
+from copy import deepcopy
+
 import uvicorn
+from uvicorn.config import LOGGING_CONFIG
 
 from app.settings import runtime_environment
+
+
+def build_log_config() -> dict:
+    config = deepcopy(LOGGING_CONFIG)
+    config["loggers"]["jarvis.usage"] = {
+        "handlers": ["default"],
+        "level": "INFO",
+        "propagate": False,
+    }
+    return config
 
 
 def main() -> None:
@@ -20,6 +33,7 @@ def main() -> None:
         port=port,
         proxy_headers=False,
         access_log=False,
+        log_config=build_log_config(),
     )
 
 

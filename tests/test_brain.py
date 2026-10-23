@@ -183,6 +183,69 @@ async def test_router_selects_fast_deep_and_pro_modes(config):
     assert pro["max_output_tokens"] == config.max_output_tokens_cientifico
 
 
+@pytest.mark.parametrize(
+    "question",
+    [
+        "¿Por qué los ISRS bloquean la recaptura de serotonina?",
+        "¿Cómo modifica la quetiapina los receptores D2 y 5-HT2A?",
+        "Explica la farmacocinética y los efectos adversos de las benzodiacepinas.",
+        "¿Qué estructuras cerebrales participan en la fisiopatología del trastorno bipolar?",
+        "Resume la evidencia de un ensayo sobre la dosis de litio.",
+    ],
+)
+async def test_medical_questions_route_to_deep_model(config, question):
+    create = AsyncMock(side_effect=lambda **kwargs: response(model=kwargs["model"]))
+    brain = make_brain(config, create)
+
+    await brain.ask(AskRequest(texto=question), CONTEXT)
+
+    assert create.await_args.kwargs["model"] == config.modelo_profundo
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "¿Qué hora es?",
+        "¿Cómo estará el clima hoy?",
+        "Recuérdame comprar café mañana.",
+    ],
+)
+async def test_everyday_questions_stay_on_fast_model(config, question):
+    create = AsyncMock(side_effect=lambda **kwargs: response(model=kwargs["model"]))
+    brain = make_brain(config, create)
+
+    await brain.ask(AskRequest(texto=question), CONTEXT)
+
+    assert create.await_args.kwargs["model"] == config.modelo_rapido
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        (
+            "¿Por qué una bicicleta se mantiene estable cuando avanza con suficiente velocidad "
+            "pero pierde esa estabilidad al detenerse por completo?"
+        ),
+        (
+            "¿Cómo funciona una brújula cuando viajamos lejos de una ciudad y no tenemos "
+            "señal de teléfono para orientarnos con un mapa?"
+        ),
+        (
+            "¿Cuál es el mecanismo que permite a un termostato mantener estable la temperatura "
+            "de una habitación durante toda la noche?"
+        ),
+    ],
+)
+async def test_long_explanatory_question_routes_to_deep_model(config, question):
+    create = AsyncMock(side_effect=lambda **kwargs: response(model=kwargs["model"]))
+    brain = make_brain(config, create)
+
+    await brain.ask(AskRequest(texto=question), CONTEXT)
+
+    assert create.await_args.kwargs["model"] == config.modelo_profundo
+    assert len(question.split()) > 15
+
+
 async def test_scientific_mode_persists_until_normal_mode(config):
     captured = []
 
@@ -210,6 +273,7 @@ async def test_usage_log_has_aggregate_cost_without_content(config, caplog):
         input_tokens=1000,
         input_tokens_details=SimpleNamespace(cached_tokens=200, cache_write_tokens=100),
         output_tokens=500,
+        output_tokens_details=SimpleNamespace(reasoning_tokens=300),
     )
     client = SimpleNamespace(
         responses=SimpleNamespace(
@@ -222,12 +286,27 @@ async def test_usage_log_has_aggregate_cost_without_content(config, caplog):
     )
     brain = Brain(client, config, "Personalidad", ToolRegistry.discover())
     caplog.set_level(logging.INFO, logger="jarvis.usage")
-    await brain.ask(AskRequest(texto="private-question"), CONTEXT)
+    await brain.ask(
+        AskRequest(
+            texto="private-question",
+            dispositivo="Mac\nprivate-device-line",
+            lat=25.6866,
+            lon=-100.3161,
+        ),
+        CONTEXT,
+    )
     log = caplog.text
-    assert "model=gpt-6-luna" in log
-    assert "estimated_cost_usd=0.00033450" in log
-    assert "input_tokens=1000" in log and "output_tokens=500" in log
+    records = [record for record in caplog.records if record.name == "jarvis.usage"]
+    assert len(records) == 1
+    assert "hora=" in log and 'dispositivo="Mac\\nprivate-device-line"' in log
+    assert 'modelo="gpt-6-luna"' in log
+    assert "razon=predeterminado" in log and "modo=standard" in log
+    assert "costo_estimado_usd=0.00033450" in log and "latencia_ms=" in log
+    assert "tokens_entrada=1000" in log and "tokens_salida=500" in log
+    assert "tokens_razonamiento=300" in log
     assert "private-question" not in log and "private-answer" not in log
+    assert "25.6866" not in log and "-100.3161" not in log
+    assert "\nprivate-device-line" not in records[0].getMessage()
 
 
 @pytest.mark.parametrize("result", [response(text=""), response(status="incomplete")])
@@ -239,7 +318,7 @@ async def test_empty_or_truncated_response_is_not_success(config, result):
     assert len(brain._history) == 0
 
 
-async def test_tool_loop_is_bounded(config):
+async def test_tool_loop_is_bounded_and_logs_once(config, caplog):
     calls = []
     call = SimpleNamespace(
         type="function_call", name="obtener_hora_actual", call_id="call_1", arguments="{}"
@@ -250,7 +329,11 @@ async def test_tool_loop_is_bounded(config):
         return response(output=[call])
 
     brain = make_brain(config, create)
+    caplog.set_level(logging.INFO, logger="jarvis.usage")
     with pytest.raises(BrainError):
         await brain.ask(AskRequest(texto="Hola"), CONTEXT)
     assert len(calls) == config.max_rondas_herramientas + 1
     assert calls[-1]["tool_choice"] == "none"
+    records = [record for record in caplog.records if record.name == "jarvis.usage"]
+    assert len(records) == 1
+    assert "estado=error" in records[0].getMessage()

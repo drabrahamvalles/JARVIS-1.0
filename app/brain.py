@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import re
+import time
 import unicodedata
 from collections import deque
 from dataclasses import dataclass
@@ -19,50 +20,12 @@ from app.settings import AppConfig, ModelPricing
 usage_logger = logging.getLogger("jarvis.usage")
 usage_logger.setLevel(logging.INFO)
 
-DEEP_TERMS = (
-    "analisis",
-    "analiza",
-    "biologia",
-    "causalidad",
-    "ciencia",
-    "cientifico",
-    "cientifica",
-    "cirugia",
-    "clinico",
-    "clinica",
-    "compara",
-    "deduce",
-    "demuestra",
-    "diagnostico",
-    "dosis",
-    "enfermedad",
-    "epidemiologia",
-    "estadistica",
-    "evalua",
-    "evidencia",
-    "experimento",
-    "farmaco",
-    "fisica",
-    "fisiologia",
-    "genetica",
-    "hipotesis",
-    "investigacion",
-    "logica",
-    "medicina",
-    "medico",
-    "medica",
-    "molecula",
-    "paciente",
-    "paso a paso",
-    "patologia",
-    "probabilidad",
-    "quimica",
-    "razona",
-    "razonamiento",
-    "salud",
-    "sintoma",
-    "tratamiento",
+COMPLEX_QUESTION_PHRASES = (
+    "por que",
+    "como funciona",
+    "cual es el mecanismo",
 )
+COMPLEX_QUESTION_MIN_WORDS = 15
 
 
 class BrainError(Exception):
@@ -85,6 +48,7 @@ class TokenUsage:
     cached_tokens: int = 0
     cache_write_tokens: int = 0
     output_tokens: int = 0
+    reasoning_tokens: int = 0
     available: bool = False
 
     def add_response(self, response: Any) -> None:
@@ -92,10 +56,12 @@ class TokenUsage:
         if usage is None:
             return
         details = _field(usage, "input_tokens_details")
+        output_details = _field(usage, "output_tokens_details")
         self.input_tokens += int(_field(usage, "input_tokens", 0) or 0)
         self.cached_tokens += int(_field(details, "cached_tokens", 0) or 0)
         self.cache_write_tokens += int(_field(details, "cache_write_tokens", 0) or 0)
         self.output_tokens += int(_field(usage, "output_tokens", 0) or 0)
+        self.reasoning_tokens += int(_field(output_details, "reasoning_tokens", 0) or 0)
         self.available = True
 
 
@@ -114,6 +80,13 @@ def _normalize(text: str) -> str:
 
 def _contains_term(text: str, term: str) -> bool:
     return re.search(rf"\b{re.escape(term)}\b", text) is not None
+
+
+def _is_complex_question(text: str) -> bool:
+    word_count = len(re.findall(r"\b\w+\b", text))
+    return word_count > COMPLEX_QUESTION_MIN_WORDS and any(
+        _contains_term(text, phrase) for phrase in COMPLEX_QUESTION_PHRASES
+    )
 
 
 def estimate_cost_usd(usage: TokenUsage, pricing: ModelPricing) -> float | None:
@@ -144,8 +117,9 @@ class Brain:
 
     async def ask(self, request: AskRequest, context: ToolContext) -> str:
         # Serializar conserva un orden conversacional inequívoco para el único usuario de JARVIS.
+        started_at = time.perf_counter()
         async with self._conversation_lock:
-            return await self._ask_locked(request, context)
+            return await self._ask_locked(request, context, started_at)
 
     def _select_route(self, text: str) -> ModelRoute:
         normalized = _normalize(text)
@@ -172,10 +146,20 @@ class Brain:
                 "high",
                 self.config.max_output_tokens_cientifico,
             )
-        if any(_contains_term(normalized, term) for term in DEEP_TERMS):
+        deep_terms = (_normalize(term) for term in self.config.terminos_modelo_profundo)
+        if any(_contains_term(normalized, term) for term in deep_terms):
             return ModelRoute(
                 self.config.modelo_profundo,
                 "tema_profundo",
+                "standard",
+                self.config.razonamiento_profundo,
+                "low",
+                self.config.max_output_tokens,
+            )
+        if _is_complex_question(normalized):
+            return ModelRoute(
+                self.config.modelo_profundo,
+                "pregunta_compleja",
                 "standard",
                 self.config.razonamiento_profundo,
                 "low",
@@ -221,7 +205,9 @@ class Brain:
             )
         return result
 
-    async def _ask_locked(self, request: AskRequest, context: ToolContext) -> str:
+    async def _ask_locked(
+        self, request: AskRequest, context: ToolContext, started_at: float
+    ) -> str:
         route = self._select_route(request.texto)
         current_input = {
             "role": "user",
@@ -232,79 +218,93 @@ class Brain:
         history: list[Any] = [*self._history, current_input]
         usage = TokenUsage()
         actual_models: set[str] = set()
-
-        for round_number in range(self.config.max_rondas_herramientas + 1):
-            final_round = round_number == self.config.max_rondas_herramientas
-            response = await self.client.responses.create(
-                model=route.model,
-                instructions=self._instructions(context, route),
-                input=history,
-                tools=self.registry.schemas,
-                tool_choice="none" if final_round or not self.registry.schemas else "auto",
-                parallel_tool_calls=False,
-                reasoning={"mode": route.reasoning_mode, "effort": route.reasoning_effort},
-                text={"verbosity": route.verbosity},
-                max_output_tokens=route.max_output_tokens,
-                store=False,
-            )
-            usage.add_response(response)
-            actual_models.add(_field(response, "model", route.model) or route.model)
-            if response.status != "completed":
-                self._log_usage(route, usage, actual_models, completed=False)
-                raise BrainError("Respuesta incompleta")
-            calls = [item for item in response.output if _field(item, "type") == "function_call"]
-            if not calls:
-                answer = (response.output_text or "").strip()
-                if not answer:
-                    self._log_usage(route, usage, actual_models, completed=False)
-                    raise BrainError("Respuesta vacía")
-                self._history.extend(
-                    (
-                        {"role": "user", "content": request.texto},
-                        {"role": "assistant", "content": answer},
+        completed = False
+        try:
+            for round_number in range(self.config.max_rondas_herramientas + 1):
+                final_round = round_number == self.config.max_rondas_herramientas
+                response = await self.client.responses.create(
+                    model=route.model,
+                    instructions=self._instructions(context, route),
+                    input=history,
+                    tools=self.registry.schemas,
+                    tool_choice="none" if final_round or not self.registry.schemas else "auto",
+                    parallel_tool_calls=False,
+                    reasoning={"mode": route.reasoning_mode, "effort": route.reasoning_effort},
+                    text={"verbosity": route.verbosity},
+                    max_output_tokens=route.max_output_tokens,
+                    store=False,
+                )
+                usage.add_response(response)
+                actual_models.add(_field(response, "model", route.model) or route.model)
+                if response.status != "completed":
+                    raise BrainError("Respuesta incompleta")
+                calls = [
+                    item for item in response.output if _field(item, "type") == "function_call"
+                ]
+                if not calls:
+                    answer = (response.output_text or "").strip()
+                    if not answer:
+                        raise BrainError("Respuesta vacía")
+                    self._history.extend(
+                        (
+                            {"role": "user", "content": request.texto},
+                            {"role": "assistant", "content": answer},
+                        )
                     )
-                )
-                self._log_usage(route, usage, actual_models, completed=True)
-                return answer
-            if final_round or len(calls) > 8:
-                self._log_usage(route, usage, actual_models, completed=False)
-                raise BrainError("Límite de herramientas excedido")
-            # Conservar los elementos de razonamiento requeridos por Responses en esta petición.
-            history.extend(response.output)
-            for call in calls:
-                result = await self.registry.execute(call.name, call.arguments, context)
-                history.append(
-                    {
-                        "type": "function_call_output",
-                        "call_id": call.call_id,
-                        "output": result,
-                    }
-                )
-        raise BrainError("Límite de rondas excedido")
+                    completed = True
+                    return answer
+                if final_round or len(calls) > 8:
+                    raise BrainError("Límite de herramientas excedido")
+                # Conservar los elementos de razonamiento requeridos por Responses en esta petición.
+                history.extend(response.output)
+                for call in calls:
+                    result = await self.registry.execute(call.name, call.arguments, context)
+                    history.append(
+                        {
+                            "type": "function_call_output",
+                            "call_id": call.call_id,
+                            "output": result,
+                        }
+                    )
+            raise BrainError("Límite de rondas excedido")
+        finally:
+            self._log_usage(
+                request,
+                route,
+                usage,
+                actual_models,
+                completed=completed,
+                latency_ms=round((time.perf_counter() - started_at) * 1000),
+            )
 
     def _log_usage(
         self,
+        request: AskRequest,
         route: ModelRoute,
         usage: TokenUsage,
         actual_models: set[str],
         *,
         completed: bool,
+        latency_ms: int,
     ) -> None:
         pricing = self.config.precios_modelos[route.model]
         cost = estimate_cost_usd(usage, pricing)
+        timestamp = datetime.now().astimezone().isoformat(timespec="seconds")
+        device = json.dumps(request.dispositivo or "desconocido")
+        models = json.dumps(",".join(sorted(actual_models)) or route.model)
         usage_logger.info(
-            "openai_usage model=%s route=%s mode=%s effort=%s verbosity=%s "
-            "input_tokens=%d cached_tokens=%d cache_write_tokens=%d output_tokens=%d "
-            "estimated_cost_usd=%s completed=%s",
-            ",".join(sorted(actual_models)) or route.model,
+            "ask hora=%s dispositivo=%s modelo=%s razon=%s modo=%s "
+            "tokens_entrada=%d tokens_salida=%d tokens_razonamiento=%d "
+            "costo_estimado_usd=%s latencia_ms=%d estado=%s",
+            timestamp,
+            device,
+            models,
             route.reason,
             route.reasoning_mode,
-            route.reasoning_effort,
-            route.verbosity,
             usage.input_tokens,
-            usage.cached_tokens,
-            usage.cache_write_tokens,
             usage.output_tokens,
+            usage.reasoning_tokens,
             "unknown" if cost is None else f"{cost:.8f}",
-            str(completed).lower(),
+            latency_ms,
+            "ok" if completed else "error",
         )

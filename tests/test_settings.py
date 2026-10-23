@@ -4,7 +4,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from app.__main__ import main
+from app.__main__ import build_log_config, main
 from app.settings import AppConfig, load_config, load_secrets, runtime_environment
 
 
@@ -42,6 +42,17 @@ def test_same_start_command_supports_mac_and_provider(env, host, port):
         main()
     assert run.call_args.kwargs["host"] == host
     assert run.call_args.kwargs["port"] == port
+    assert run.call_args.kwargs["log_config"]["loggers"]["jarvis.usage"] == {
+        "handlers": ["default"],
+        "level": "INFO",
+        "propagate": False,
+    }
+
+
+def test_usage_logger_is_visible_once_in_uvicorn():
+    logger_config = build_log_config()["loggers"]["jarvis.usage"]
+    assert logger_config["handlers"] == ["default"]
+    assert logger_config["propagate"] is False
 
 
 @pytest.mark.parametrize("port", ["invalid", "0", "65536"])
