@@ -27,4 +27,7 @@ def client(config):
     app = create_app(config=config, secrets=Secrets(jarvis_token=TOKEN))
     with TestClient(app) as client:
         app.state.brain = SimpleNamespace(ask=AsyncMock(return_value="A su servicio, Dr. Valles."))
+        app.state.briefing = SimpleNamespace(
+            create=AsyncMock(return_value="Buenos días, Dr. Valles. Hoy no tiene pendientes.")
+        )
         yield client

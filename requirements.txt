@@ -6,3 +6,4 @@ PyYAML==6.0.3
 timezonefinder==9.2.0
 python-dotenv==1.2.4
 tzdata==2026.5
+httpx==0.28.1

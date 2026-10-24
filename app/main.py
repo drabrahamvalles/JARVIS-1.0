@@ -10,9 +10,10 @@ from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpe
 from starlette.concurrency import run_in_threadpool
 
 from app.brain import Brain, BrainError
+from app.briefing import Briefing, BriefingError
 from app.context import TimezoneResolver
 from app.registry import ToolRegistry
-from app.schemas import AskRequest, AskResponse
+from app.schemas import AskRequest, AskResponse, BriefingRequest, BriefingResponse
 from app.settings import ROOT, AppConfig, Secrets, load_config, load_secrets, runtime_environment
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,7 @@ def create_app(*, config: AppConfig | None = None, secrets: Secrets | None = Non
         app.state.resolver = resolver
         client = None
         app.state.brain = None
+        app.state.briefing = None
         try:
             if app.state.secrets.openai_api_key:
                 client = AsyncOpenAI(
@@ -41,10 +43,13 @@ def create_app(*, config: AppConfig | None = None, secrets: Secrets | None = Non
                     max_retries=1,
                 )
                 app.state.brain = Brain(client, app.state.config, personality, registry)
+                app.state.briefing = Briefing(client, app.state.config, personality)
             else:
-                logger.warning("OPENAI_API_KEY no configurada; /ask no está disponible")
+                logger.warning(
+                    "OPENAI_API_KEY no configurada; /ask y /briefing no están disponibles"
+                )
             if not app.state.secrets.jarvis_token:
-                logger.warning("JARVIS_TOKEN no configurado; /ask permanece cerrado")
+                logger.warning("JARVIS_TOKEN no configurado; endpoints protegidos cerrados")
             yield
         finally:
             if client is not None:
@@ -52,8 +57,8 @@ def create_app(*, config: AppConfig | None = None, secrets: Secrets | None = Non
             await run_in_threadpool(resolver.close)
 
     application = FastAPI(
-        title="JARVIS · Fase 1",
-        version="0.1.0",
+        title="JARVIS · Fase 2",
+        version="0.2.0",
         lifespan=lifespan,
         docs_url="/docs" if expose_docs else None,
         redoc_url="/redoc" if expose_docs else None,
@@ -97,6 +102,28 @@ def create_app(*, config: AppConfig | None = None, secrets: Secrets | None = Non
         except (APIStatusError, APIConnectionError, BrainError) as exc:
             logger.warning("ask_failed kind=%s", type(exc).__name__)
             raise HTTPException(502, "No fue posible obtener una respuesta de OpenAI") from None
+
+    @application.post(
+        "/briefing", response_model=BriefingResponse, dependencies=[Depends(require_token)]
+    )
+    async def briefing(payload: BriefingRequest, request: Request) -> BriefingResponse:
+        service = request.app.state.briefing
+        if service is None:
+            raise HTTPException(503, "OPENAI_API_KEY no configurada")
+        try:
+            async with asyncio.timeout(90):
+                context = await run_in_threadpool(
+                    request.app.state.resolver.resolve, payload, request.app.state.config
+                )
+                answer = await service.create(payload, context)
+            return BriefingResponse(respuesta=answer)
+        except (APITimeoutError, TimeoutError):
+            raise HTTPException(504, "OpenAI tardó demasiado en responder") from None
+        except RateLimitError:
+            raise HTTPException(503, "OpenAI está ocupado o sin cuota disponible") from None
+        except (APIStatusError, APIConnectionError, BriefingError) as exc:
+            logger.warning("briefing_failed kind=%s", type(exc).__name__)
+            raise HTTPException(502, "No fue posible generar el briefing") from None
 
     return application
 

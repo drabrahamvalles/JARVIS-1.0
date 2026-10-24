@@ -1,14 +1,18 @@
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Protocol
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from timezonefinder import TimezoneFinder
 
-from app.schemas import AskRequest
 from app.settings import AppConfig
 from app.timezone_state import read_timezone_state
 
 TimezoneOrigin = Literal["coordenadas", "por_defecto", "fijo", "manual"]
+
+
+class CoordinatesRequest(Protocol):
+    lat: float | None
+    lon: float | None
 
 
 @dataclass(frozen=True)
@@ -21,6 +25,8 @@ class ToolContext:
     dispositivo: str | None = None
     zona_horaria_automatica: str | None = None
     origen_zona_horaria_automatica: TimezoneOrigin | None = None
+    latitud_clima: float | None = None
+    longitud_clima: float | None = None
 
 
 def active_timezone(context: ToolContext) -> tuple[str, TimezoneOrigin]:
@@ -38,7 +44,7 @@ class TimezoneResolver:
         # Un único índice local por servidor, reutilizado entre solicitudes.
         self.finder = TimezoneFinder()
 
-    def resolve(self, request: AskRequest, config: AppConfig) -> ToolContext:
+    def resolve(self, request: CoordinatesRequest, config: AppConfig) -> ToolContext:
         name = config.zona_horaria_por_defecto
         source = "fijo" if config.modo_zona_horaria == "fijo" else "por_defecto"
         if config.modo_zona_horaria == "automatico" and request.lat is not None:
@@ -60,9 +66,13 @@ class TimezoneResolver:
             ciudad_referencia=config.ciudad,
             lat=request.lat,
             lon=request.lon,
-            dispositivo=request.dispositivo,
+            dispositivo=getattr(request, "dispositivo", None),
             zona_horaria_automatica=automatic_name,
             origen_zona_horaria_automatica=automatic_source,
+            latitud_clima=(request.lat if request.lat is not None else config.latitud_por_defecto),
+            longitud_clima=(
+                request.lon if request.lon is not None else config.longitud_por_defecto
+            ),
         )
 
     def close(self) -> None:

@@ -14,14 +14,14 @@ Explícame cada decisión en español, en lenguaje simple, y por qué se hace as
   ejecutados, resultado de las pruebas y pendientes.
 
 ## Qué es
-Asistente personal por voz. Servidor Python + FastAPI desplegado en Railway.
+Asistente personal por voz. Servidor Python + FastAPI desplegado en Google Cloud Run.
 Cerebro: API de OpenAI con function calling; el modelo se define en config/config.yaml.
 Clientes: Atajos de iOS (iPhone y Mac), programa "Hey Jarvis" en la Mac y, después,
 satélites de voz en el cuarto y el consultorio.
 
 ## Reglas
 - Nunca pongas llaves en el código: variables de entorno, y mantén .env.example al día.
-- Nunca me pidas que pegue llaves o tokens en el chat; yo los escribo en .env o en Railway.
+- Nunca me pidas que pegue llaves o tokens en el chat; yo los escribo en .env o en Cloud Run.
 - Todo endpoint, excepto /health, exige el encabezado Authorization: Bearer JARVIS_TOKEN.
 - Una herramienta por archivo en app/tools/.
 - Escribe pruebas en tests/ para cada herramienta y ejecútalas antes de dar algo por terminado.
@@ -36,4 +36,4 @@ satélites de voz en el cuarto y el consultorio.
 
 ## Protocolo
 Construimos por fases (0 a 9) según el documento "Protocolo JARVIS".
-Fase actual: 1.
+Fase actual: 2.

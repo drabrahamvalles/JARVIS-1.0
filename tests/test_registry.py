@@ -16,6 +16,7 @@ def test_builtin_discovery_and_strict_schema():
     assert set(by_name) == {
         "consultar_zona_horaria",
         "fijar_zona_horaria",
+        "obtener_clima",
         "obtener_hora_actual",
         "volver_a_automatico",
     }
@@ -24,6 +25,7 @@ def test_builtin_discovery_and_strict_schema():
         assert schema["parameters"]["additionalProperties"] is False
         assert "context" not in json.dumps(schema)
     assert by_name["obtener_hora_actual"]["parameters"]["properties"] == {}
+    assert by_name["obtener_clima"]["parameters"]["properties"] == {}
     assert set(by_name["fijar_zona_horaria"]["parameters"]["properties"]) == {
         "ciudad",
         "zona_iana",

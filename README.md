@@ -1,13 +1,13 @@
-# JARVIS · Fase 1
+# JARVIS · Fase 2
 
-Servidor FastAPI para ejecutarse en tu Mac. No se ha desplegado ningún servicio.
-Recibe texto y devuelve texto preparado para escucharse. La captura de voz y la
-síntesis de audio corresponden al cliente y quedan fuera de esta fase.
+Servidor FastAPI desplegado en Google Cloud Run y ejecutable también en la Mac.
+Recibe preguntas y genera un briefing matutino preparado para escucharse. La captura
+de voz, la alarma y la síntesis de audio corresponden a los clientes de Apple.
 
 ## Ejecutar en este Mac
 
 El entorno `.venv` ya está instalado. Las variables de `.env` están vacías: configura
-localmente `OPENAI_API_KEY` y `JARVIS_TOKEN` antes de usar `/ask`. Son dos secretos
+localmente `OPENAI_API_KEY` y `JARVIS_TOKEN` antes de usar `/ask` o `/briefing`. Son dos secretos
 distintos; no los pongas en `config.yaml` ni los compartas en el chat.
 
 Desde la carpeta del proyecto:
@@ -65,6 +65,38 @@ La respuesta exitosa contiene únicamente `respuesta`:
 {"respuesta": "A su servicio, Dr. Valles."}
 ```
 
+`POST /briefing` usa el mismo encabezado Bearer y recibe:
+
+```json
+{
+  "fecha_iso": "2026-10-24T07:00:00-07:00",
+  "lat": 23.2494,
+  "lon": -106.4111,
+  "ciudad": "Mazatlán",
+  "eventos": ["09:00 Consulta administrativa"],
+  "recordatorios": ["Comprar café"]
+}
+```
+
+`fecha_iso` admite `AAAA-MM-DD` o una fecha-hora ISO 8601 completa con zona. Eventos
+y recordatorios aceptan listas o un solo texto con un elemento por renglón; los
+renglones vacíos se ignoran. Ambos campos son obligatorios pero pueden estar vacíos.
+`ciudad` es opcional: si llega se
+menciona; si no llega con coordenadas, se omite. Si las coordenadas se omiten, son
+`null` o cadenas vacías, se usan Monterrey y sus coordenadas configuradas. Nunca
+envíes nombres ni otros datos identificables de pacientes en eventos o recordatorios.
+
+El servidor consulta Open-Meteo sin llave para obtener ocho días de mínimas, máximas
+y probabilidad de lluvia en °C. Usa la zona IANA calculada a partir de las coordenadas.
+Las reglas de chamarra, suéter, paraguas, calor y sus textos están en
+`config/config.yaml`. Si el clima falla, el briefing continúa sin inventarlo.
+
+El saludo usa la hora actual de la zona resuelta, no `fecha_iso`. Las temperaturas se
+redondean antes de redactar. Los lunes incluye en una o dos oraciones sólo lluvia de
+50 % o más, cambios de al menos 5 °C y frío o calor notables; no enumera cada día.
+Los demás días sólo incluye el clima de hoy. La respuesta es prosa hablada sin
+markdown y de aproximadamente 110 palabras.
+
 Prueba local desde otra terminal, cargando las variables de tu `.env`:
 
 ```sh
@@ -83,13 +115,14 @@ Errores: `401` si falta el Bearer o es incorrecto; `422` si el cuerpo es inváli
 `503` si falta configuración, hay saturación o se agotó la cuota de OpenAI;
 `502` si OpenAI falla o no produce una respuesta completa; `504` si vence el
 tiempo de espera. `/health` comprueba el proceso, no la clave ni la cuota de OpenAI.
-Si falta `JARVIS_TOKEN`, `/ask` permanece cerrado con `503`.
+Si falta `JARVIS_TOKEN`, todos los endpoints protegidos permanecen cerrados con `503`.
 
 ## Modelo y personalidad
 
-`config/config.yaml` define dos modelos y permite cambiarlos sin editar Python:
+`config/config.yaml` define los modelos y permite cambiarlos sin editar Python:
 
 - `gpt-6-luna` atiende las solicitudes normales con razonamiento `low`.
+- `gpt-6-luna` redacta también el briefing en una llamada independiente y sin memoria.
 - `gpt-6.1-sol` atiende medicina, ciencia y razonamiento con esfuerzo `medium`.
 - La frase "a fondo" usa Sol con modo de razonamiento `pro`, esfuerzo `high` y
   respuesta extensa.
@@ -103,8 +136,8 @@ Fuentes: [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna),
 [razonamiento `pro`](https://developers.openai.com/api/docs/guides/reasoning).
 
 Cada petición terminada registra modelo, ruta, parámetros, tokens y costo aproximado.
-No registra el texto de entrada o salida. El cálculo suma todas las rondas de
-herramientas y no sustituye la factura del proveedor.
+No registra el texto de entrada o salida. `/briefing` tampoco registra ciudad,
+eventos, recordatorios ni coordenadas. El cálculo no sustituye la factura del proveedor.
 
 La personalidad se carga de `config/personalidad.md`: español de México,
 "Dr. Valles", estilo británico, humor sutil y máximo cuatro oraciones salvo
@@ -120,10 +153,10 @@ Sin coordenadas o sin una zona reconocible, usa `America/Monterrey`.
 
 El reloj y las expresiones como "hoy" o "mañana" reciben la zona resuelta.
 `zoneinfo` aplica las reglas IANA, incluidos los cambios estacionales donde
-correspondan. La ciudad configurada, Monterrey, es una referencia; no se afirma
-que el dispositivo esté allí. Las coordenadas no se envían a OpenAI en esta fase.
+correspondan. La ciudad configurada, Monterrey, es la ubicación predeterminada para
+el clima. Las coordenadas no se envían a OpenAI.
 
-JARVIS dispone de tres herramientas: fijar una zona manual, volver al modo
+JARVIS dispone de tres herramientas de zona: fijar una zona manual, volver al modo
 automático y consultar la zona activa. Para cualquier ciudad, el modelo propone
 la zona IANA y el servidor la valida con `zoneinfo.available_timezones()`. Si la
 ciudad es ambigua, JARVIS debe pedir país o región antes de cambiarla; una zona
@@ -152,7 +185,7 @@ def sumar(a: float, b: float) -> float:
 También se admiten funciones `async`. Si necesitas ubicación o zona horaria,
 agrega `*, context: ToolContext` e importa `ToolContext` de `app.context`.
 Ese parámetro lo inyecta el servidor y no puede proporcionarlo el modelo.
-Se incluyen el reloj y las tres herramientas de zona horaria, una por archivo.
+Se incluyen el reloj, el clima y las tres herramientas de zona horaria, una por archivo.
 
 Los esquemas se generan con Pydantic y el SDK oficial en modo estricto. Solo se
 ejecutan nombres registrados y argumentos validados. El cerebro devuelve los
@@ -172,28 +205,27 @@ ruff format --check app tests
 python -m pip check
 ```
 
-Las pruebas cubren HTTP, autenticación, seis ciudades por coordenadas, horario de
-verano, estado manual/automático, memoria, enrutamiento, costos, descubrimiento de
-módulos y function calling con transporte simulado. No consumen crédito ni envían
-datos a OpenAI.
+Las pruebas cubren HTTP, autenticación, fechas de Atajos, clima, reglas de ropa,
+agenda, ubicación predeterminada, seis ciudades por coordenadas, horario de verano,
+memoria, enrutamiento, costos, privacidad del registro, descubrimiento de módulos y
+function calling. Open-Meteo y OpenAI se simulan; las pruebas no usan red ni crédito.
 
 El servidor conserva en memoria los últimos diez turnos completos y los pierde al
 reiniciar. Sólo añade intercambios exitosos; no persiste resultados de herramientas,
 coordenadas ni etiquetas de dispositivo. Se solicita `store=False` a Responses;
 esto no modifica las políticas de retención del proveedor.
 
-## Preparado para Railway o Render
+## Despliegue en Google Cloud Run
 
-No se ha hecho ningún despliegue. Para el futuro, ambos pueden usar el mismo
-código y estos comandos, con Python 3.12:
+El servicio `jarvis` se despliega desde el código fuente con Python 3.15. Cloud Run usa:
 
 - Instalación: `pip install -r requirements.txt`.
 - Arranque: `python -m app` (también declarado en `Procfile`).
 - Health check: `/health`.
 - Secretos del servicio: `OPENAI_API_KEY` y `JARVIS_TOKEN`.
 
-El puerto se obtiene de `PORT`. Cuando el proveedor define `PORT`, escucha en
+El puerto se obtiene de `PORT`. Cuando Cloud Run define `PORT`, escucha en
 `0.0.0.0` salvo un `HOST` explícito. Con `HOST` y `PORT` vacíos, el servidor usa
-`127.0.0.1:8000`. En Railway debe usarse el puerto asignado por el proveedor.
+`127.0.0.1:8000`. La documentación interactiva sólo se expone en modo local.
 `data/estado.json` puede perderse al reiniciar o redesplegar un contenedor con
 almacenamiento efímero.

@@ -1,5 +1,6 @@
 modelo_rapido: "gpt-6-luna"
 modelo_profundo: "gpt-6.1-sol"
+modelo_briefing: "gpt-6-luna"
 terminos_modelo_profundo:
   - "analisis"
   - "analiza"
@@ -133,11 +134,25 @@ precios_modelos:
     escritura_cache: 2.50
     salida: 10.00
 ciudad: "Monterrey"
+latitud_por_defecto: 25.6866
+longitud_por_defecto: -100.3161
 zona_horaria_por_defecto: "America/Monterrey"
 modo_zona_horaria: "automatico"
+reglas_ropa:
+  chamarra_menor_que_c: 8
+  sueter_desde_c: 8
+  sueter_hasta_c: 15
+  paraguas_desde_pct: 50
+  ropa_ligera_desde_c: 33
+  texto_chamarra: "chamarra"
+  texto_sueter: "suéter ligero"
+  texto_paraguas: "paraguas"
+  texto_ropa_ligera: "ropa ligera e hidratación"
+  texto_sin_recomendacion: "ropa habitual"
 razonamiento_rapido: "low"
 razonamiento_profundo: "medium"
 razonamiento_a_fondo: "high"
 max_output_tokens: 1200
 max_output_tokens_cientifico: 4000
+max_output_tokens_briefing: 300
 max_rondas_herramientas: 3

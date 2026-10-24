@@ -1,3 +1,4 @@
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -10,6 +11,15 @@ from app.brain import BrainError
 from app.main import create_app
 from app.settings import Secrets
 from tests.conftest import AUTH, TOKEN
+
+BRIEFING_PAYLOAD = {
+    "fecha_iso": "2026-10-24",
+    "lat": 23.2494,
+    "lon": -106.4111,
+    "ciudad": "Mazatlán",
+    "eventos": [],
+    "recordatorios": [],
+}
 
 
 def test_health_without_credentials(config):
@@ -44,11 +54,24 @@ def test_ask_requires_bearer(client, headers):
     client.app.state.brain.ask.assert_not_awaited()
 
 
+@pytest.mark.parametrize(
+    "headers", [{}, {"Authorization": "Bearer incorrecto"}, {"Authorization": "Basic x"}]
+)
+def test_briefing_requires_bearer(client, headers):
+    response = client.post("/briefing", json=BRIEFING_PAYLOAD, headers=headers)
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+    client.app.state.briefing.create.assert_not_awaited()
+
+
 def test_missing_openai_key_is_explicit(config):
     with TestClient(create_app(config=config, secrets=Secrets(jarvis_token=TOKEN))) as client:
         response = client.post("/ask", json={"texto": "Hola"}, headers=AUTH)
         assert response.status_code == 503
         assert response.json() == {"detail": "OPENAI_API_KEY no configurada"}
+        briefing = client.post("/briefing", json=BRIEFING_PAYLOAD, headers=AUTH)
+        assert briefing.status_code == 503
+        assert briefing.json() == {"detail": "OPENAI_API_KEY no configurada"}
 
 
 def test_ask_contract_and_default_timezone(client):
@@ -71,6 +94,73 @@ def test_ask_gps_changes_timezone_for_this_request_only(client):
     assert client.post("/ask", json={"texto": "Hola"}, headers=AUTH).status_code == 200
     _, next_context = client.app.state.brain.ask.await_args.args
     assert next_context.zona_horaria == "America/Monterrey"
+
+
+@pytest.mark.parametrize(
+    ("fecha_iso", "expected"),
+    [
+        ("2026-10-24", date(2026, 10, 24)),
+        ("2026-10-24T07:00:00-07:00", date(2026, 10, 24)),
+    ],
+)
+def test_briefing_accepts_both_iso_date_formats(client, fecha_iso, expected):
+    response = client.post(
+        "/briefing", json={**BRIEFING_PAYLOAD, "fecha_iso": fecha_iso}, headers=AUTH
+    )
+    assert response.status_code == 200
+    assert response.json() == {"respuesta": "Buenos días, Dr. Valles. Hoy no tiene pendientes."}
+    payload, context = client.app.state.briefing.create.await_args.args
+    assert payload.fecha_iso == expected
+    assert payload.ciudad == "Mazatlán"
+    assert context.zona_horaria == "America/Mazatlan"
+
+
+def test_briefing_empty_location_uses_configured_coordinates(client, config):
+    payload = {
+        "fecha_iso": "2026-10-24T07:00:00-07:00",
+        "lat": "",
+        "lon": "",
+        "eventos": [],
+        "recordatorios": [],
+    }
+    assert client.post("/briefing", json=payload, headers=AUTH).status_code == 200
+    request, context = client.app.state.briefing.create.await_args.args
+    assert request.lat is None and request.lon is None and request.ciudad is None
+    assert context.latitud_clima == config.latitud_por_defecto
+    assert context.longitud_clima == config.longitud_por_defecto
+    assert context.zona_horaria == "America/Monterrey"
+
+
+@pytest.mark.parametrize(
+    ("eventos", "recordatorios", "expected_events", "expected_reminders"),
+    [
+        (
+            "09:00 Reunión\n\n12:30 Llamada\n",
+            "Comprar café\n  \nEnviar informe",
+            ["09:00 Reunión", "12:30 Llamada"],
+            ["Comprar café", "Enviar informe"],
+        ),
+        (
+            ["09:00 Reunión", "12:30 Llamada"],
+            ["Comprar café"],
+            ["09:00 Reunión", "12:30 Llamada"],
+            ["Comprar café"],
+        ),
+        ("\n  \n", "", [], []),
+    ],
+)
+def test_briefing_accepts_shortcuts_text_lists_and_empty_values(
+    client, eventos, recordatorios, expected_events, expected_reminders
+):
+    payload = {
+        **BRIEFING_PAYLOAD,
+        "eventos": eventos,
+        "recordatorios": recordatorios,
+    }
+    assert client.post("/briefing", json=payload, headers=AUTH).status_code == 200
+    request, _ = client.app.state.briefing.create.await_args.args
+    assert request.eventos == expected_events
+    assert request.recordatorios == expected_reminders
 
 
 @pytest.mark.parametrize(
