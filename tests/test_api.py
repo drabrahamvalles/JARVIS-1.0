@@ -20,6 +20,20 @@ def test_health_without_credentials(config):
         assert client.post("/ask", json={"texto": "Hola"}).status_code == 503
 
 
+@pytest.mark.parametrize("path", ["/docs", "/redoc", "/openapi.json"])
+def test_interactive_docs_are_available_on_mac(config, monkeypatch, path):
+    monkeypatch.setenv("HOST", "127.0.0.1")
+    with TestClient(create_app(config=config, secrets=Secrets())) as client:
+        assert client.get(path).status_code == 200
+
+
+@pytest.mark.parametrize("path", ["/docs", "/redoc", "/openapi.json"])
+def test_interactive_docs_are_disabled_on_cloud_run(config, monkeypatch, path):
+    monkeypatch.setenv("HOST", "0.0.0.0")
+    with TestClient(create_app(config=config, secrets=Secrets())) as client:
+        assert client.get(path).status_code == 404
+
+
 @pytest.mark.parametrize(
     "headers", [{}, {"Authorization": "Bearer incorrecto"}, {"Authorization": "Basic incorrecto"}]
 )

@@ -13,13 +13,16 @@ from app.brain import Brain, BrainError
 from app.context import TimezoneResolver
 from app.registry import ToolRegistry
 from app.schemas import AskRequest, AskResponse
-from app.settings import ROOT, AppConfig, Secrets, load_config, load_secrets
+from app.settings import ROOT, AppConfig, Secrets, load_config, load_secrets, runtime_environment
 
 logger = logging.getLogger(__name__)
 bearer = HTTPBearer(auto_error=False)
 
 
 def create_app(*, config: AppConfig | None = None, secrets: Secrets | None = None) -> FastAPI:
+    host = (runtime_environment().get("HOST") or "127.0.0.1").strip()
+    expose_docs = host == "127.0.0.1"
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.config = config if config is not None else load_config()
@@ -48,7 +51,14 @@ def create_app(*, config: AppConfig | None = None, secrets: Secrets | None = Non
                 await client.close()
             await run_in_threadpool(resolver.close)
 
-    application = FastAPI(title="JARVIS · Fase 1", version="0.1.0", lifespan=lifespan)
+    application = FastAPI(
+        title="JARVIS · Fase 1",
+        version="0.1.0",
+        lifespan=lifespan,
+        docs_url="/docs" if expose_docs else None,
+        redoc_url="/redoc" if expose_docs else None,
+        openapi_url="/openapi.json" if expose_docs else None,
+    )
 
     async def require_token(
         request: Request,
