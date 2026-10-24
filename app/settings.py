@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Literal, Self
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -49,6 +50,7 @@ class AppConfig(BaseModel):
     modelo_rapido: str = Field(min_length=1)
     modelo_profundo: str = Field(min_length=1)
     modelo_briefing: str = Field(min_length=1)
+    modelo_captura: str = Field(min_length=1)
     terminos_modelo_profundo: tuple[str, ...] = Field(min_length=1)
     precios_modelos: dict[str, ModelPricing]
     ciudad: str = Field(min_length=1)
@@ -63,6 +65,9 @@ class AppConfig(BaseModel):
     max_output_tokens: int = Field(default=1200, ge=128, le=8000)
     max_output_tokens_cientifico: int = Field(default=4000, ge=128, le=8000)
     max_output_tokens_briefing: int = Field(default=300, ge=128, le=1000)
+    max_output_tokens_captura: int = Field(default=600, ge=128, le=2000)
+    tamano_maximo_imagen_bytes: int = Field(default=5_000_000, ge=1)
+    hora_recordatorio_por_defecto: str = "09:00"
     max_rondas_herramientas: int = Field(default=3, ge=0, le=6)
 
     @field_validator("zona_horaria_por_defecto")
@@ -84,11 +89,27 @@ class AppConfig(BaseModel):
             raise ValueError("Los términos del modelo profundo no pueden repetirse")
         return cleaned
 
+    @field_validator("hora_recordatorio_por_defecto")
+    @classmethod
+    def valid_default_reminder_time(cls, value: str) -> str:
+        try:
+            parsed = datetime.strptime(value, "%H:%M")
+        except ValueError as exc:
+            raise ValueError("Se requiere una hora HH:MM válida") from exc
+        if parsed.strftime("%H:%M") != value:
+            raise ValueError("Se requiere una hora HH:MM válida")
+        return value
+
     @model_validator(mode="after")
     def prices_exist_for_selected_models(self) -> Self:
         missing = {
             model
-            for model in (self.modelo_rapido, self.modelo_profundo, self.modelo_briefing)
+            for model in (
+                self.modelo_rapido,
+                self.modelo_profundo,
+                self.modelo_briefing,
+                self.modelo_captura,
+            )
             if model not in self.precios_modelos
         }
         if missing:

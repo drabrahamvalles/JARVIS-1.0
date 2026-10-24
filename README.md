@@ -1,8 +1,9 @@
-# JARVIS · Fase 2
+# JARVIS · Fase 2.5
 
 Servidor FastAPI desplegado en Google Cloud Run y ejecutable también en la Mac.
 Recibe preguntas y genera un briefing matutino preparado para escucharse. La captura
-de voz, la alarma y la síntesis de audio corresponden a los clientes de Apple.
+de voz, la alarma, las capturas de pantalla y la síntesis de audio corresponden a los
+clientes de Apple.
 
 ## Ejecutar en este Mac
 
@@ -97,6 +98,47 @@ redondean antes de redactar. Los lunes incluye en una o dos oraciones sólo lluv
 Los demás días sólo incluye el clima de hoy. La respuesta es prosa hablada sin
 markdown y de aproximadamente 110 palabras.
 
+`POST /captura` analiza una captura de pantalla y devuelve los datos que el Atajo
+necesita para crear automáticamente un evento o recordatorio, sin una confirmación
+intermedia:
+
+```json
+{
+  "texto": "Ponlo en mi agenda",
+  "imagen_base64": "<imagen PNG, JPEG, WebP o GIF no animado>",
+  "lat": 23.2494,
+  "lon": -106.4111,
+  "ciudad": "Mazatlán",
+  "dispositivo": "iPhone"
+}
+```
+
+La imagen puede ser Base64 puro o una URL `data:image/...;base64,...` y no puede
+superar 5 MB una vez decodificada. Sólo se mantiene en memoria durante la petición:
+no se escribe en disco ni aparece en los registros. Nunca envíes capturas con nombres
+u otros datos identificables de pacientes.
+
+La respuesta siempre conserva esta forma:
+
+```json
+{
+  "tipo": "evento",
+  "titulo": "Cena con Ana",
+  "inicio": "2026-11-05 09:00",
+  "fin": "2026-11-05 10:00",
+  "lugar": "Centro",
+  "notas": null,
+  "respuesta": "Listo, Dr. Valles. Agregué 'Cena con Ana' el jueves 5 de noviembre a las 9:00."
+}
+```
+
+Las fechas y horas se resuelven en la zona horaria del usuario. Un evento sin duración
+dura una hora. Un recordatorio con fecha pero sin hora usa
+`hora_recordatorio_por_defecto` de `config/config.yaml`; un recordatorio claro sin
+fecha se crea sin vencimiento. Si un evento no tiene fecha u hora, o no hay una acción
+clara, `tipo` es `ninguno` y `respuesta` explica qué faltó. El Atajo de iOS es quien
+crea finalmente el elemento en Calendar o Recordatorios y lee la respuesta en voz alta.
+
 Prueba local desde otra terminal, cargando las variables de tu `.env`:
 
 ```sh
@@ -123,6 +165,7 @@ Si falta `JARVIS_TOKEN`, todos los endpoints protegidos permanecen cerrados con 
 
 - `gpt-6-luna` atiende las solicitudes normales con razonamiento `low`.
 - `gpt-6-luna` redacta también el briefing en una llamada independiente y sin memoria.
+- `gpt-6-luna` analiza capturas con visión y salida JSON estructurada.
 - `gpt-6.1-sol` atiende medicina, ciencia y razonamiento con esfuerzo `medium`.
 - La frase "a fondo" usa Sol con modo de razonamiento `pro`, esfuerzo `high` y
   respuesta extensa.
@@ -137,7 +180,9 @@ Fuentes: [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna),
 
 Cada petición terminada registra modelo, ruta, parámetros, tokens y costo aproximado.
 No registra el texto de entrada o salida. `/briefing` tampoco registra ciudad,
-eventos, recordatorios ni coordenadas. El cálculo no sustituye la factura del proveedor.
+eventos, recordatorios ni coordenadas. `/captura` registra sólo modelo, tokens, costo,
+latencia y estado: nunca la imagen, el texto o los datos extraídos. El cálculo no
+sustituye la factura del proveedor.
 
 La personalidad se carga de `config/personalidad.md`: español de México,
 "Dr. Valles", estilo británico, humor sutil y máximo cuatro oraciones salvo
@@ -206,7 +251,8 @@ python -m pip check
 ```
 
 Las pruebas cubren HTTP, autenticación, fechas de Atajos, clima, reglas de ropa,
-agenda, ubicación predeterminada, seis ciudades por coordenadas, horario de verano,
+agenda, captura visual, salida estructurada, límite de imagen, recordatorios con y sin
+fecha, ubicación predeterminada, seis ciudades por coordenadas, horario de verano,
 memoria, enrutamiento, costos, privacidad del registro, descubrimiento de módulos y
 function calling. Open-Meteo y OpenAI se simulan; las pruebas no usan red ni crédito.
 

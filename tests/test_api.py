@@ -21,6 +21,15 @@ BRIEFING_PAYLOAD = {
     "recordatorios": [],
 }
 
+CAPTURA_PAYLOAD = {
+    "texto": "Agenda este compromiso",
+    "imagen_base64": "iVBORw0KGgo=",
+    "lat": 23.2494,
+    "lon": -106.4111,
+    "ciudad": "Mazatlán",
+    "dispositivo": "iPhone",
+}
+
 
 def test_health_without_credentials(config):
     with TestClient(create_app(config=config, secrets=Secrets())) as client:
@@ -64,6 +73,16 @@ def test_briefing_requires_bearer(client, headers):
     client.app.state.briefing.create.assert_not_awaited()
 
 
+@pytest.mark.parametrize(
+    "headers", [{}, {"Authorization": "Bearer incorrecto"}, {"Authorization": "Basic x"}]
+)
+def test_capture_requires_bearer(client, headers):
+    response = client.post("/captura", json=CAPTURA_PAYLOAD, headers=headers)
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+    client.app.state.captura.analyze.assert_not_awaited()
+
+
 def test_missing_openai_key_is_explicit(config):
     with TestClient(create_app(config=config, secrets=Secrets(jarvis_token=TOKEN))) as client:
         response = client.post("/ask", json={"texto": "Hola"}, headers=AUTH)
@@ -72,6 +91,9 @@ def test_missing_openai_key_is_explicit(config):
         briefing = client.post("/briefing", json=BRIEFING_PAYLOAD, headers=AUTH)
         assert briefing.status_code == 503
         assert briefing.json() == {"detail": "OPENAI_API_KEY no configurada"}
+        captura = client.post("/captura", json=CAPTURA_PAYLOAD, headers=AUTH)
+        assert captura.status_code == 503
+        assert captura.json() == {"detail": "OPENAI_API_KEY no configurada"}
 
 
 def test_ask_contract_and_default_timezone(client):
@@ -129,6 +151,17 @@ def test_briefing_empty_location_uses_configured_coordinates(client, config):
     assert context.latitud_clima == config.latitud_por_defecto
     assert context.longitud_clima == config.longitud_por_defecto
     assert context.zona_horaria == "America/Monterrey"
+
+
+def test_capture_contract_and_timezone(client):
+    response = client.post("/captura", json=CAPTURA_PAYLOAD, headers=AUTH)
+    assert response.status_code == 200
+    assert response.json()["tipo"] == "ninguno"
+    payload, context = client.app.state.captura.analyze.await_args.args
+    assert payload.texto == "Agenda este compromiso"
+    assert payload.ciudad == "Mazatlán"
+    assert payload.dispositivo == "iPhone"
+    assert context.zona_horaria == "America/Mazatlan"
 
 
 @pytest.mark.parametrize(

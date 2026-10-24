@@ -1,6 +1,7 @@
 modelo_rapido: "gpt-6-luna"
 modelo_profundo: "gpt-6.1-sol"
 modelo_briefing: "gpt-6-luna"
+modelo_captura: "gpt-6-luna"
 terminos_modelo_profundo:
   - "analisis"
   - "analiza"
@@ -155,4 +156,7 @@ razonamiento_a_fondo: "high"
 max_output_tokens: 1200
 max_output_tokens_cientifico: 4000
 max_output_tokens_briefing: 300
+max_output_tokens_captura: 600
+tamano_maximo_imagen_bytes: 5000000
+hora_recordatorio_por_defecto: "09:00"
 max_rondas_herramientas: 3

@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Annotated, Any, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -88,4 +88,47 @@ class BriefingRequest(BaseModel):
 
 
 class BriefingResponse(BaseModel):
+    respuesta: str
+
+
+class CapturaRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    texto: str = Field(max_length=4000, strict=True)
+    imagen_base64: str = Field(min_length=1, strict=True)
+    lat: Annotated[float, Field(ge=-90, le=90, allow_inf_nan=False, strict=True)] | None = None
+    lon: Annotated[float, Field(ge=-180, le=180, allow_inf_nan=False, strict=True)] | None = None
+    ciudad: str | None = Field(default=None, min_length=1, max_length=120, strict=True)
+    dispositivo: str | None = Field(default=None, min_length=1, max_length=120, strict=True)
+
+    @field_validator("lat", "lon", mode="before")
+    @classmethod
+    def empty_coordinate_is_missing(cls, value: Any) -> Any:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @field_validator("ciudad", "dispositivo", mode="before")
+    @classmethod
+    def empty_optional_text_is_missing(cls, value: Any) -> Any:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @model_validator(mode="after")
+    def paired_coordinates(self) -> Self:
+        if (self.lat is None) != (self.lon is None):
+            raise ValueError("Envía lat y lon juntas, o ninguna")
+        return self
+
+
+class CapturaResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tipo: Literal["evento", "recordatorio", "ninguno"]
+    titulo: str | None
+    inicio: str | None
+    fin: str | None
+    lugar: str | None
+    notas: str | None
     respuesta: str

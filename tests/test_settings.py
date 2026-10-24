@@ -78,3 +78,16 @@ def test_selected_models_require_pricing(config):
     contents["precios_modelos"].pop(config.modelo_profundo)
     with pytest.raises(ValidationError, match="Faltan precios"):
         AppConfig.model_validate(contents)
+
+
+@pytest.mark.parametrize("value", ["9:00", "24:00", "09:60", "mañana"])
+def test_default_reminder_time_requires_valid_hh_mm(config, value):
+    with pytest.raises(ValidationError, match="HH:MM"):
+        AppConfig.model_validate({**config.model_dump(), "hora_recordatorio_por_defecto": value})
+
+
+def test_capture_model_requires_configured_pricing(config):
+    contents = config.model_dump()
+    contents["modelo_captura"] = "modelo-sin-precio"
+    with pytest.raises(ValidationError, match="Faltan precios"):
+        AppConfig.model_validate(contents)

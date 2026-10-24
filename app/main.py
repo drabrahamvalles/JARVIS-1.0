@@ -13,8 +13,21 @@ from app.brain import Brain, BrainError
 from app.briefing import Briefing, BriefingError
 from app.context import TimezoneResolver
 from app.registry import ToolRegistry
-from app.schemas import AskRequest, AskResponse, BriefingRequest, BriefingResponse
+from app.schemas import (
+    AskRequest,
+    AskResponse,
+    BriefingRequest,
+    BriefingResponse,
+    CapturaRequest,
+    CapturaResponse,
+)
 from app.settings import ROOT, AppConfig, Secrets, load_config, load_secrets, runtime_environment
+from app.tools.captura import (
+    Captura,
+    CapturaError,
+    ImagenDemasiadoGrandeError,
+    ImagenInvalidaError,
+)
 
 logger = logging.getLogger(__name__)
 bearer = HTTPBearer(auto_error=False)
@@ -35,6 +48,7 @@ def create_app(*, config: AppConfig | None = None, secrets: Secrets | None = Non
         client = None
         app.state.brain = None
         app.state.briefing = None
+        app.state.captura = None
         try:
             if app.state.secrets.openai_api_key:
                 client = AsyncOpenAI(
@@ -44,10 +58,9 @@ def create_app(*, config: AppConfig | None = None, secrets: Secrets | None = Non
                 )
                 app.state.brain = Brain(client, app.state.config, personality, registry)
                 app.state.briefing = Briefing(client, app.state.config, personality)
+                app.state.captura = Captura(client, app.state.config, personality)
             else:
-                logger.warning(
-                    "OPENAI_API_KEY no configurada; /ask y /briefing no están disponibles"
-                )
+                logger.warning("OPENAI_API_KEY no configurada; endpoints de OpenAI no disponibles")
             if not app.state.secrets.jarvis_token:
                 logger.warning("JARVIS_TOKEN no configurado; endpoints protegidos cerrados")
             yield
@@ -57,8 +70,8 @@ def create_app(*, config: AppConfig | None = None, secrets: Secrets | None = Non
             await run_in_threadpool(resolver.close)
 
     application = FastAPI(
-        title="JARVIS · Fase 2",
-        version="0.2.0",
+        title="JARVIS · Fase 2.5",
+        version="0.2.5",
         lifespan=lifespan,
         docs_url="/docs" if expose_docs else None,
         redoc_url="/redoc" if expose_docs else None,
@@ -124,6 +137,33 @@ def create_app(*, config: AppConfig | None = None, secrets: Secrets | None = Non
         except (APIStatusError, APIConnectionError, BriefingError) as exc:
             logger.warning("briefing_failed kind=%s", type(exc).__name__)
             raise HTTPException(502, "No fue posible generar el briefing") from None
+
+    @application.post(
+        "/captura", response_model=CapturaResponse, dependencies=[Depends(require_token)]
+    )
+    async def captura(payload: CapturaRequest, request: Request) -> CapturaResponse:
+        service = request.app.state.captura
+        if service is None:
+            raise HTTPException(503, "OPENAI_API_KEY no configurada")
+        try:
+            async with asyncio.timeout(90):
+                context = await run_in_threadpool(
+                    request.app.state.resolver.resolve, payload, request.app.state.config
+                )
+                return await service.analyze(payload, context)
+        except ImagenDemasiadoGrandeError:
+            raise HTTPException(413, "La imagen supera el límite de 5 MB") from None
+        except ImagenInvalidaError:
+            raise HTTPException(
+                422, "La imagen debe ser Base64 válido en formato PNG, JPEG, WebP o GIF no animado"
+            ) from None
+        except (APITimeoutError, TimeoutError):
+            raise HTTPException(504, "OpenAI tardó demasiado en responder") from None
+        except RateLimitError:
+            raise HTTPException(503, "OpenAI está ocupado o sin cuota disponible") from None
+        except (APIStatusError, APIConnectionError, CapturaError) as exc:
+            logger.warning("captura_failed kind=%s", type(exc).__name__)
+            raise HTTPException(502, "No fue posible analizar la captura") from None
 
     return application
 

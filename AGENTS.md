@@ -36,4 +36,4 @@ satélites de voz en el cuarto y el consultorio.
 
 ## Protocolo
 Construimos por fases (0 a 9) según el documento "Protocolo JARVIS".
-Fase actual: 2.
+Fase actual: 2.5.
