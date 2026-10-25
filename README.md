@@ -91,6 +91,9 @@ El servidor consulta Open-Meteo sin llave para obtener ocho días de mínimas, m
 y probabilidad de lluvia en °C. Usa la zona IANA calculada a partir de las coordenadas.
 Las reglas de chamarra, suéter, paraguas, calor y sus textos están en
 `config/config.yaml`. Si el clima falla, el briefing continúa sin inventarlo.
+Los avisos de clima no disponible y agenda vacía los agrega el servidor, no el
+modelo. El servidor elimina oraciones contradictorias y usa una plantilla fija si
+detecta varios errores o si la reparación deja un texto incoherente.
 
 El saludo usa la hora actual de la zona resuelta, no `fecha_iso`. Las temperaturas se
 redondean antes de redactar. Los lunes incluye en una o dos oraciones sólo lluvia de

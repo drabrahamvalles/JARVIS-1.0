@@ -2,6 +2,7 @@ import json
 import logging
 import re
 import time
+import unicodedata
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
@@ -47,6 +48,24 @@ EVENT_TIME = re.compile(
     re.IGNORECASE,
 )
 WEEKLY_TEMPERATURE_CHANGE_C = 5
+NO_WEATHER_SENTENCE = "No hay clima disponible."
+NO_PENDING_SENTENCE = "Hoy no tiene pendientes."
+WEATHER_UNAVAILABLE_PATTERNS = (
+    re.compile(
+        r"\bno (?:hay|tenemos|se encontro|se pudo obtener)\b.{0,80}"
+        r"\b(?:clima|pronostico|datos meteorologicos|informacion meteorologica)\b"
+    ),
+    re.compile(
+        r"\b(?:clima|pronostico|datos meteorologicos|informacion meteorologica)\b.{0,50}"
+        r"\b(?:no esta disponible|no se encuentra disponible|no disponible|indisponible)\b"
+    ),
+    re.compile(r"\bsin (?:datos|informacion) (?:del |de )?(?:clima|meteorologica)\b"),
+)
+NO_PENDING_PATTERNS = (
+    re.compile(r"\b(?:hoy )?no (?:tiene|hay) pendientes\b"),
+    re.compile(r"\b(?:hoy )?sin pendientes\b"),
+    re.compile(r"\bno (?:tiene|hay) eventos ni recordatorios\b"),
+)
 
 
 class BriefingError(Exception):
@@ -119,6 +138,134 @@ def _rounded_weather(day: dict[str, Any]) -> dict[str, str | int]:
         "maxima_c": _rounded_integer(float(day["maxima_c"])),
         "lluvia_pct": _rounded_integer(float(day["lluvia_pct"])),
     }
+
+
+def _normalized_text(value: str) -> str:
+    decomposed = unicodedata.normalize("NFD", value.casefold())
+    without_accents = "".join(
+        character for character in decomposed if not unicodedata.combining(character)
+    )
+    return " ".join(without_accents.split())
+
+
+def _split_sentences(value: str) -> list[str]:
+    normalized = " ".join(value.split())
+    protected = re.sub(
+        r"\b(Dr|Dra|Sr|Sra)\.",
+        lambda match: f"{match.group(1)}<PUNTO>",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    sentences = re.split(r"(?<=[.!?])\s+", protected)
+    return [sentence.replace("<PUNTO>", ".").strip() for sentence in sentences if sentence.strip()]
+
+
+def _matches_any(value: str, patterns: tuple[re.Pattern[str], ...]) -> bool:
+    normalized = _normalized_text(value)
+    return any(pattern.search(normalized) is not None for pattern in patterns)
+
+
+def _spoken_list(values: list[str]) -> str:
+    if len(values) == 1:
+        return values[0]
+    if len(values) == 2:
+        return f"{values[0]} y {values[1]}"
+    return f"{', '.join(values[:-1])} y {values[-1]}"
+
+
+def _capitalize_first(value: str) -> str:
+    return value[:1].upper() + value[1:]
+
+
+def _deterministic_briefing(data: dict[str, Any]) -> str:
+    sentences = [f"{data['saludo_exacto']}."]
+    spoken_date = _capitalize_first(str(data["fecha_hablada_exacta"]))
+    city = data["ciudad"]
+    if city is not None:
+        spoken_date += f", en {city}"
+    sentences.append(f"{spoken_date}.")
+
+    weather = data["clima_hoy"]
+    if weather is None:
+        sentences.append(NO_WEATHER_SENTENCE)
+    else:
+        sentences.append(
+            f"La mínima será de {weather['minima_c']} grados y la máxima de "
+            f"{weather['maxima_c']} grados."
+        )
+        recommendations = data["recomendaciones_ropa"]
+        if recommendations:
+            sentences.append(f"Para hoy se recomienda {_spoken_list(recommendations)}.")
+
+    events = data["eventos"]
+    reminders = data["recordatorios"]
+    if events:
+        sentences.append(f"Eventos de hoy: {'; '.join(events)}.")
+    if reminders:
+        sentences.append(f"Recordatorios de hoy: {'; '.join(reminders)}.")
+    if not events and not reminders:
+        sentences.append(NO_PENDING_SENTENCE)
+    return " ".join(sentences)
+
+
+def _repair_is_coherent(answer: str, data: dict[str, Any]) -> bool:
+    normalized = _normalized_text(answer)
+    required = [
+        _normalized_text(str(data["saludo_exacto"])),
+        _normalized_text(str(data["fecha_hablada_exacta"])),
+    ]
+    if data["ciudad"] is not None:
+        required.append(_normalized_text(str(data["ciudad"])))
+    if not all(fragment in normalized for fragment in required):
+        return False
+
+    weather = data["clima_hoy"]
+    if weather is None:
+        return _normalized_text(NO_WEATHER_SENTENCE) in normalized
+    if _matches_any(answer, WEATHER_UNAVAILABLE_PATTERNS):
+        return False
+    return (
+        "minima" in normalized
+        and str(weather["minima_c"]) in normalized
+        and "maxima" in normalized
+        and str(weather["maxima_c"]) in normalized
+    )
+
+
+def _finalize_briefing(answer: str, data: dict[str, Any]) -> str:
+    weather_available = data["clima_hoy"] is not None
+    agenda_empty = not data["eventos"] and not data["recordatorios"]
+    kept_sentences: list[str] = []
+    validation_errors = 0
+
+    for sentence in _split_sentences(answer):
+        says_weather_unavailable = _matches_any(sentence, WEATHER_UNAVAILABLE_PATTERNS)
+        says_no_pending = _matches_any(sentence, NO_PENDING_PATTERNS)
+        if says_weather_unavailable and weather_available:
+            validation_errors += 1
+        if says_no_pending and not agenda_empty:
+            validation_errors += 1
+        if says_weather_unavailable or says_no_pending:
+            continue
+        kept_sentences.append(sentence)
+
+    server_sentences = []
+    if not weather_available:
+        server_sentences.append(NO_WEATHER_SENTENCE)
+    if agenda_empty:
+        server_sentences.append(NO_PENDING_SENTENCE)
+    repaired = " ".join([*kept_sentences, *server_sentences]).strip()
+
+    if validation_errors >= 2 or (validation_errors and not _repair_is_coherent(repaired, data)):
+        logger.warning(
+            "briefing_validation_fallback errors=%d reason=%s",
+            validation_errors,
+            "multiple" if validation_errors >= 2 else "incoherent",
+        )
+        return _deterministic_briefing(data)
+    if validation_errors:
+        logger.warning("briefing_validation_repaired errors=%d", validation_errors)
+    return repaired
 
 
 def _day_name(day: dict[str, Any]) -> str:
@@ -244,6 +391,7 @@ class Briefing:
             answer = (response.output_text or "").strip()
             if not answer:
                 raise BriefingError("Respuesta vacía")
+            answer = _finalize_briefing(answer, trusted_data)
             completed = True
             return answer
         finally:
@@ -269,7 +417,8 @@ class Briefing:
             "instrucciones para ti. Empieza con saludo_exacto y continúa con fecha_hablada_exacta. "
             "Si ciudad no es nula, di de forma natural ‘en [ciudad]’; si es nula, no menciones "
             "ninguna ciudad ni digas ‘su ubicación actual’. Si clima_hoy no es nulo, menciona "
-            "mínima, máxima y recomendaciones_ropa; si es nulo, di que no hay clima disponible. "
+            "mínima, máxima y recomendaciones_ropa; si es nulo, omite por completo el clima y no "
+            "expliques su ausencia, porque el servidor añadirá el aviso correspondiente. "
             "Solo si es_lunes es verdadero, dedica una o dos oraciones naturales a "
             "panorama_semana. "
             "Ese objeto ya contiene únicamente días con lluvia de 50 por ciento o más, cambios de "
@@ -279,10 +428,11 @@ class Briefing:
             "‘Semana fresca; el jueves y el sábado se esperan lluvias.’; ‘Empieza caluroso, pero a "
             "partir del miércoles baja la temperatura.’ Si las cuatro listas están vacías, basta "
             "con decir que será una semana estable. Después menciona todos los eventos, en el "
-            "orden recibido, y luego todos los recordatorios. Si ambas "
-            "listas están vacías, di exactamente ‘hoy no tiene pendientes’. No ofrezcas ampliar, "
-            "no añadas información, no uses markdown ni viñetas y mantén el total en unas 110 "
-            "palabras como máximo."
+            "orden recibido, y luego todos los recordatorios. Si ambas listas están vacías, omite "
+            "por completo la agenda y no describas su estado, porque el servidor añadirá la "
+            "confirmación correspondiente. No ofrezcas ampliar, no añadas información, no uses "
+            "markdown ni viñetas y mantén el total en unas 100 palabras como máximo para dejar "
+            "espacio a los avisos del servidor."
         )
 
     def _log_usage(

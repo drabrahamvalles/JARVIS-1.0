@@ -208,7 +208,90 @@ async def test_tuesday_without_pending_items(config, monkeypatch):
     assert data["ciudad"] is None
     assert data["panorama_semana"] is None
     assert data["eventos"] == [] and data["recordatorios"] == []
-    assert "hoy no tiene pendientes" in create.await_args.kwargs["instructions"]
+    assert "omite por completo la agenda" in create.await_args.kwargs["instructions"]
+
+
+async def test_saturday_night_with_weather_and_empty_agenda_is_repaired(config, monkeypatch):
+    freeze_local_hour(monkeypatch, 21)
+    weather = forecast(
+        date(2026, 10, 24),
+        minimums=[24] * 8,
+        maximums=[34] * 8,
+        rain=[60] * 8,
+    )
+    monkeypatch.setattr("app.briefing.obtener_clima", AsyncMock(return_value=weather))
+    model_text = (
+        "Buenas noches, Dr. Valles. Hoy es sábado 24 de octubre, en Mazatlán. "
+        "La mínima será de 24 grados y la máxima de 34; se recomienda llevar paraguas, "
+        "usar ropa ligera y mantenerse hidratado. No hay clima disponible."
+    )
+    briefing, _ = service(config, model_text)
+    request = BriefingRequest(
+        fecha_iso="2026-10-24T21:19:00-07:00",
+        lat=23.2494,
+        lon=-106.4111,
+        ciudad="Mazatlán",
+        eventos=[],
+        recordatorios=[],
+    )
+    context = ToolContext(
+        "America/Mazatlan",
+        "coordenadas",
+        "Monterrey",
+        latitud_clima=23.2494,
+        longitud_clima=-106.4111,
+    )
+
+    result = await briefing.create(request, context)
+
+    assert result == (
+        "Buenas noches, Dr. Valles. Hoy es sábado 24 de octubre, en Mazatlán. "
+        "La mínima será de 24 grados y la máxima de 34; se recomienda llevar paraguas, "
+        "usar ropa ligera y mantenerse hidratado. Hoy no tiene pendientes."
+    )
+    assert "No hay clima disponible" not in result
+
+
+async def test_two_validation_errors_use_deterministic_fallback(config, monkeypatch, caplog):
+    freeze_local_hour(monkeypatch, 21)
+    weather = forecast(
+        date(2026, 10, 24),
+        minimums=[24] * 8,
+        maximums=[34] * 8,
+        rain=[60] * 8,
+    )
+    monkeypatch.setattr("app.briefing.obtener_clima", AsyncMock(return_value=weather))
+    model_text = (
+        "Buenas noches, Dr. Valles. Hoy es sábado 24 de octubre, en Mazatlán. "
+        "No hay clima disponible. El pronóstico no está disponible."
+    )
+    briefing, _ = service(config, model_text)
+    request = BriefingRequest(
+        fecha_iso="2026-10-24T21:19:00-07:00",
+        lat=23.2494,
+        lon=-106.4111,
+        ciudad="Mazatlán",
+        eventos=[],
+        recordatorios=[],
+    )
+    context = ToolContext(
+        "America/Mazatlan",
+        "coordenadas",
+        "Monterrey",
+        latitud_clima=23.2494,
+        longitud_clima=-106.4111,
+    )
+    caplog.set_level(logging.WARNING, logger="app.briefing")
+
+    result = await briefing.create(request, context)
+
+    assert result == (
+        "Buenas noches, Dr. Valles. Hoy es sábado 24 de octubre, en Mazatlán. "
+        "La mínima será de 24 grados y la máxima de 34 grados. "
+        "Para hoy se recomienda paraguas y ropa ligera e hidratación. "
+        "Hoy no tiene pendientes."
+    )
+    assert "briefing_validation_fallback errors=2 reason=multiple" in caplog.text
 
 
 async def test_cold_day_orders_three_events_and_recommends_jacket(config, monkeypatch):
@@ -264,12 +347,14 @@ async def test_open_meteo_failure_still_generates_briefing(config, monkeypatch, 
     )
     caplog.set_level(logging.WARNING, logger="app.briefing")
 
-    assert await briefing.create(request, context) == result_text
+    assert await briefing.create(request, context) == (
+        "Buenos días, Dr. Valles. No hay clima disponible. Hoy no tiene pendientes."
+    )
 
     data = trusted_data(create)
     assert data["clima_hoy"] is None
     assert data["recomendaciones_ropa"] == []
-    assert "no hay clima disponible" in create.await_args.kwargs["instructions"]
+    assert "omite por completo el clima" in create.await_args.kwargs["instructions"]
     assert "private-location-and-event" not in caplog.text
     assert "kind=RuntimeError" in caplog.text
 
