@@ -27,6 +27,8 @@ satélites de voz en el cuarto y el consultorio.
 - Escribe pruebas en tests/ para cada herramienta y ejecútalas antes de dar algo por terminado.
 - Nada se envía a nombre del usuario sin su confirmación explícita.
 - Nunca proceses datos identificables de pacientes.
+- Nunca crees un recurso con costo mensual fijo (instancias mínimas, bases de datos siempre
+  encendidas, IPs reservadas, etc.) sin aprobación explícita del usuario.
 - Al terminar cada tarea, haz commit con un mensaje descriptivo en español.
 
 ## Entorno
