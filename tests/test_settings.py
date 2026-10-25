@@ -91,3 +91,71 @@ def test_capture_model_requires_configured_pricing(config):
     contents["modelo_captura"] = "modelo-sin-precio"
     with pytest.raises(ValidationError, match="Faltan precios"):
         AppConfig.model_validate(contents)
+
+
+def test_flight_timezone_table_contains_approved_airports_and_city_aliases(config):
+    expected = {
+        "MEX",
+        "NLU",
+        "GDL",
+        "MTY",
+        "MZT",
+        "CUN",
+        "TIJ",
+        "SJD",
+        "PVR",
+        "HMO",
+        "CUU",
+        "BJX",
+        "MID",
+        "OAX",
+        "QRO",
+        "SLP",
+        "AGU",
+        "TRC",
+        "CUL",
+        "VER",
+        "ZIH",
+        "JFK",
+        "EWR",
+        "LGA",
+        "BOS",
+        "ORD",
+        "IAH",
+        "DFW",
+        "ATL",
+        "MIA",
+        "LAX",
+        "SFO",
+        "SEA",
+        "DEN",
+        "PHX",
+        "MSP",
+        "DTW",
+        "PHL",
+        "BWI",
+        "IAD",
+        "CLT",
+    }
+
+    assert set(config.zonas_horarias_vuelos) == expected
+    assert "Mazatlán" in config.zonas_horarias_vuelos["MZT"].alias
+    assert "New York" in config.zonas_horarias_vuelos["JFK"].alias
+    assert config.zonas_horarias_vuelos["MEX"].codigos_alias == ("AICM",)
+    assert config.zonas_horarias_vuelos["NLU"].codigos_alias == ("AIFA",)
+
+
+def test_flight_timezone_table_rejects_invalid_iana_zone(config):
+    contents = config.model_dump()
+    contents["zonas_horarias_vuelos"]["MZT"]["zona_iana"] = "Zona/Inexistente"
+
+    with pytest.raises(ValidationError, match="IANA válida"):
+        AppConfig.model_validate(contents)
+
+
+def test_flight_timezone_table_rejects_duplicate_code_alias(config):
+    contents = config.model_dump()
+    contents["zonas_horarias_vuelos"]["NLU"]["codigos_alias"] = ["AICM"]
+
+    with pytest.raises(ValidationError, match="no pueden repetirse"):
+        AppConfig.model_validate(contents)

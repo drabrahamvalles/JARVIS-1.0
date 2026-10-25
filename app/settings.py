@@ -1,9 +1,10 @@
 import os
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Literal, Self
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
 
 import yaml
 from dotenv import dotenv_values
@@ -44,6 +45,41 @@ class ClothingRules(BaseModel):
         return self
 
 
+class FlightTimezone(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    zona_iana: str
+    alias: tuple[str, ...] = Field(min_length=1)
+    codigos_alias: tuple[str, ...] = ()
+
+    @field_validator("zona_iana")
+    @classmethod
+    def valid_timezone(cls, value: str) -> str:
+        if value not in available_timezones():
+            raise ValueError("Se requiere una zona horaria IANA válida")
+        return value
+
+    @field_validator("alias")
+    @classmethod
+    def valid_aliases(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        cleaned = tuple(value.strip() for value in values)
+        if any(not value for value in cleaned):
+            raise ValueError("Los alias de aeropuertos no pueden estar vacíos")
+        if len({value.casefold() for value in cleaned}) != len(cleaned):
+            raise ValueError("Los alias de aeropuertos no pueden repetirse")
+        return cleaned
+
+    @field_validator("codigos_alias")
+    @classmethod
+    def valid_code_aliases(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        cleaned = tuple(value.strip().upper() for value in values)
+        if any(re.fullmatch(r"[A-Z0-9]{2,8}", value) is None for value in cleaned):
+            raise ValueError("Los alias de código deben ser alfanuméricos")
+        if len(set(cleaned)) != len(cleaned):
+            raise ValueError("Los alias de código no pueden repetirse")
+        return cleaned
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -57,6 +93,7 @@ class AppConfig(BaseModel):
     latitud_por_defecto: float = Field(ge=-90, le=90, allow_inf_nan=False)
     longitud_por_defecto: float = Field(ge=-180, le=180, allow_inf_nan=False)
     zona_horaria_por_defecto: str
+    zonas_horarias_vuelos: dict[str, FlightTimezone]
     reglas_ropa: ClothingRules
     modo_zona_horaria: Literal["automatico", "fijo"] = "automatico"
     razonamiento_rapido: Literal["low", "medium", "high", "xhigh", "max"] = "low"
@@ -65,7 +102,7 @@ class AppConfig(BaseModel):
     max_output_tokens: int = Field(default=1200, ge=128, le=8000)
     max_output_tokens_cientifico: int = Field(default=4000, ge=128, le=8000)
     max_output_tokens_briefing: int = Field(default=300, ge=128, le=1000)
-    max_output_tokens_captura: int = Field(default=600, ge=128, le=2000)
+    max_output_tokens_captura: int = Field(default=1200, ge=128, le=2000)
     tamano_maximo_imagen_bytes: int = Field(default=5_000_000, ge=1)
     hora_recordatorio_por_defecto: str = "09:00"
     max_rondas_herramientas: int = Field(default=3, ge=0, le=6)
@@ -78,6 +115,24 @@ class AppConfig(BaseModel):
         except (ZoneInfoNotFoundError, ValueError) as exc:
             raise ValueError("Se requiere una zona horaria IANA válida") from exc
         return value
+
+    @field_validator("zonas_horarias_vuelos")
+    @classmethod
+    def valid_flight_timezones(cls, values: dict[str, FlightTimezone]) -> dict[str, FlightTimezone]:
+        if not values:
+            raise ValueError("Se requiere al menos un aeropuerto")
+        cleaned: dict[str, FlightTimezone] = {}
+        used_codes: set[str] = set()
+        for code, airport in values.items():
+            normalized_code = code.strip().upper()
+            if re.fullmatch(r"[A-Z]{3}", normalized_code) is None:
+                raise ValueError("Los aeropuertos deben usar códigos IATA de tres letras")
+            codes = {normalized_code, *airport.codigos_alias}
+            if used_codes & codes:
+                raise ValueError("Los códigos y sus alias no pueden repetirse")
+            used_codes.update(codes)
+            cleaned[normalized_code] = airport
+        return cleaned
 
     @field_validator("terminos_modelo_profundo")
     @classmethod

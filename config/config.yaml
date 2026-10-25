@@ -139,6 +139,132 @@ latitud_por_defecto: 25.6866
 longitud_por_defecto: -100.3161
 zona_horaria_por_defecto: "America/Monterrey"
 modo_zona_horaria: "automatico"
+zonas_horarias_vuelos:
+  MEX:
+    zona_iana: "America/Mexico_City"
+    alias: ["Ciudad de México", "CDMX", "Mexico City"]
+    codigos_alias: ["AICM"]
+  NLU:
+    zona_iana: "America/Mexico_City"
+    alias: ["Santa Lucía", "Zumpango"]
+    codigos_alias: ["AIFA"]
+  GDL:
+    zona_iana: "America/Mexico_City"
+    alias: ["Guadalajara"]
+  MTY:
+    zona_iana: "America/Monterrey"
+    alias: ["Monterrey"]
+  MZT:
+    zona_iana: "America/Mazatlan"
+    alias: ["Mazatlán", "Mazatlan"]
+  CUN:
+    zona_iana: "America/Cancun"
+    alias: ["Cancún", "Cancun"]
+  TIJ:
+    zona_iana: "America/Tijuana"
+    alias: ["Tijuana"]
+  SJD:
+    zona_iana: "America/Mazatlan"
+    alias: ["Los Cabos", "San José del Cabo", "Cabo San Lucas"]
+  PVR:
+    zona_iana: "America/Mexico_City"
+    alias: ["Puerto Vallarta"]
+  HMO:
+    zona_iana: "America/Hermosillo"
+    alias: ["Hermosillo"]
+  CUU:
+    zona_iana: "America/Chihuahua"
+    alias: ["Chihuahua"]
+  BJX:
+    zona_iana: "America/Mexico_City"
+    alias: ["León", "Leon", "Guanajuato"]
+  MID:
+    zona_iana: "America/Merida"
+    alias: ["Mérida", "Merida"]
+  OAX:
+    zona_iana: "America/Mexico_City"
+    alias: ["Oaxaca"]
+  QRO:
+    zona_iana: "America/Mexico_City"
+    alias: ["Querétaro", "Queretaro"]
+  SLP:
+    zona_iana: "America/Mexico_City"
+    alias: ["San Luis Potosí", "San Luis Potosi"]
+  AGU:
+    zona_iana: "America/Mexico_City"
+    alias: ["Aguascalientes"]
+  TRC:
+    zona_iana: "America/Monterrey"
+    alias: ["Torreón", "Torreon"]
+  CUL:
+    zona_iana: "America/Mazatlan"
+    alias: ["Culiacán", "Culiacan"]
+  VER:
+    zona_iana: "America/Mexico_City"
+    alias: ["Veracruz"]
+  ZIH:
+    zona_iana: "America/Mexico_City"
+    alias: ["Zihuatanejo", "Ixtapa"]
+  JFK:
+    zona_iana: "America/New_York"
+    alias: ["Nueva York", "New York"]
+  EWR:
+    zona_iana: "America/New_York"
+    alias: ["Newark"]
+  LGA:
+    zona_iana: "America/New_York"
+    alias: ["LaGuardia"]
+  BOS:
+    zona_iana: "America/New_York"
+    alias: ["Boston"]
+  ORD:
+    zona_iana: "America/Chicago"
+    alias: ["Chicago", "O'Hare"]
+  IAH:
+    zona_iana: "America/Chicago"
+    alias: ["Houston"]
+  DFW:
+    zona_iana: "America/Chicago"
+    alias: ["Dallas", "Fort Worth", "Dallas-Fort Worth"]
+  ATL:
+    zona_iana: "America/New_York"
+    alias: ["Atlanta"]
+  MIA:
+    zona_iana: "America/New_York"
+    alias: ["Miami"]
+  LAX:
+    zona_iana: "America/Los_Angeles"
+    alias: ["Los Ángeles", "Los Angeles"]
+  SFO:
+    zona_iana: "America/Los_Angeles"
+    alias: ["San Francisco"]
+  SEA:
+    zona_iana: "America/Los_Angeles"
+    alias: ["Seattle"]
+  DEN:
+    zona_iana: "America/Denver"
+    alias: ["Denver"]
+  PHX:
+    zona_iana: "America/Phoenix"
+    alias: ["Phoenix"]
+  MSP:
+    zona_iana: "America/Chicago"
+    alias: ["Minneapolis", "Saint Paul", "Minneapolis-Saint Paul"]
+  DTW:
+    zona_iana: "America/Detroit"
+    alias: ["Detroit"]
+  PHL:
+    zona_iana: "America/New_York"
+    alias: ["Filadelfia", "Philadelphia"]
+  BWI:
+    zona_iana: "America/New_York"
+    alias: ["Baltimore"]
+  IAD:
+    zona_iana: "America/New_York"
+    alias: ["Washington", "Dulles"]
+  CLT:
+    zona_iana: "America/New_York"
+    alias: ["Charlotte"]
 reglas_ropa:
   chamarra_menor_que_c: 8
   sueter_desde_c: 8
@@ -156,7 +282,7 @@ razonamiento_a_fondo: "high"
 max_output_tokens: 1200
 max_output_tokens_cientifico: 4000
 max_output_tokens_briefing: 300
-max_output_tokens_captura: 600
+max_output_tokens_captura: 1200
 tamano_maximo_imagen_bytes: 5000000
 hora_recordatorio_por_defecto: "09:00"
 max_rondas_herramientas: 3

@@ -128,7 +128,7 @@ La respuesta siempre conserva esta forma:
   "fin": "2026-11-05 10:00",
   "lugar": "Centro",
   "notas": null,
-  "respuesta": "Listo, Dr. Valles. Agregué 'Cena con Ana' el jueves 5 de noviembre a las 9:00."
+  "respuesta": "Listo, Dr. Valles."
 }
 ```
 
@@ -136,8 +136,24 @@ Las fechas y horas se resuelven en la zona horaria del usuario. Un evento sin du
 dura una hora. Un recordatorio con fecha pero sin hora usa
 `hora_recordatorio_por_defecto` de `config/config.yaml`; un recordatorio claro sin
 fecha se crea sin vencimiento. Si un evento no tiene fecha u hora, o no hay una acción
-clara, `tipo` es `ninguno` y `respuesta` explica qué faltó. El Atajo de iOS es quien
-crea finalmente el elemento en Calendar o Recordatorios y lee la respuesta en voz alta.
+clara, `tipo` es `ninguno` y `respuesta` explica brevemente qué faltó. Los eventos y
+recordatorios confirmados responden sólo `Listo, Dr. Valles.` El Atajo de iOS es quien
+crea finalmente el elemento en Calendar o Recordatorios y lee esa respuesta en voz alta.
+
+Los vuelos se titulan `Vuelo ORIGEN → DESTINO (números de vuelo)` sin nombres de
+pasajeros. El modelo separa los viajes visibles y sus tramos: una conexión pertenece al
+mismo viaje, mientras que ida y regreso nunca se combinan. Si el texto pide `ida`,
+`regreso`, un día o una fecha, el servidor elige ese viaje; de otro modo selecciona la
+próxima salida que no haya pasado.
+
+El servidor convierte la salida del primer tramo y la llegada del último a la zona
+activa del usuario. Primero consulta `zonas_horarias_vuelos` de `config/config.yaml`,
+incluidos alias de código como `AICM → MEX` y `AIFA → NLU`; si el aeropuerto no está
+allí, valida la zona IANA propuesta por el modelo. Si ninguna fuente permite resolverla,
+no descarta el evento: conserva la hora impresa y añade en `notas` que corresponde a la
+hora local del origen o del destino. Una escala dudosa tampoco se descarta; se marca
+`Revisar escalas.`. El servidor sí rechaza vuelos que empiezan y terminan en el mismo
+aeropuerto, duran más de 24 horas o cuyo fin no es posterior al inicio.
 
 Prueba local desde otra terminal, cargando las variables de tu `.env`:
 
@@ -252,9 +268,10 @@ python -m pip check
 
 Las pruebas cubren HTTP, autenticación, fechas de Atajos, clima, reglas de ropa,
 agenda, captura visual, salida estructurada, límite de imagen, recordatorios con y sin
-fecha, ubicación predeterminada, seis ciudades por coordenadas, horario de verano,
-memoria, enrutamiento, costos, privacidad del registro, descubrimiento de módulos y
-function calling. Open-Meteo y OpenAI se simulan; las pruebas no usan red ni crédito.
+fecha, títulos y zonas horarias de vuelos, ubicación predeterminada, seis ciudades por
+coordenadas, horario de verano, memoria, enrutamiento, costos, privacidad del registro,
+descubrimiento de módulos y function calling. Open-Meteo y OpenAI se simulan; las
+pruebas no usan red ni crédito.
 
 El servidor conserva en memoria los últimos diez turnos completos y los pierde al
 reiniciar. Sólo añade intercambios exitosos; no persiste resultados de herramientas,
