@@ -1,4 +1,48 @@
-# JARVIS · Fase 2.5
+# JARVIS – LLM-Powered Personal Voice Assistant
+
+**Status:** in progress · actively developed since October 2026
+
+JARVIS is a personal voice assistant built by a physician with no formal software background.
+It uses a large language model (OpenAI API) as its reasoning engine and is used by voice from
+an iPhone. The project is also a hands-on way to learn how LLMs behave in real use, including
+when their answers sound confident but are wrong.
+
+## What works today
+
+| Feature | Server (this repository) | iPhone (Apple Shortcuts) |
+| --- | --- | --- |
+| Voice Q&A | `/ask` answers the question | Captures the voice and reads the answer aloud |
+| Morning briefing | `/briefing` writes the briefing: date, local weather with clothing advice, and the day's events and reminders | An automation triggers it when the alarm is turned off and reads it aloud |
+| Screenshot capture | `/captura` extracts events and reminders from a screenshot, including flights across time zones | Adds the results to Calendar and Reminders |
+| Model routing | Sends simple requests to a lighter model and complex ones to a more capable model, logging cost and latency | — |
+
+The Apple Shortcuts clients are configured on the device and are not part of this repository.
+
+## Roadmap
+
+Memory and email integration · health-data integration · custom voice and desktop client ·
+in-room voice devices
+
+## How it is built
+
+- **Server:** Python + FastAPI, configured for deployment on Google Cloud Run
+- **Reasoning:** OpenAI API with function calling (one tool per file in `app/tools/`)
+- **Quality:** automated tests with pytest and linting with Ruff
+- **Security:** the functional endpoints (`/ask`, `/briefing`, `/captura`) require a bearer token;
+  interactive API docs are disabled in production; secrets live only in environment variables
+- **Privacy rules:** nothing is sent on the user's behalf without explicit confirmation, and
+  identifiable patient data must never be sent to JARVIS
+
+## How it was developed
+
+I act as the project lead: I define the requirements, review each implementation plan, test
+the results, and decide on changes. The code is written by an AI coding agent (OpenAI Codex),
+with Claude (Anthropic) serving as the architectural guide. The working rules for the agent are
+documented in [`AGENTS.md`](AGENTS.md).
+
+**Author:** Abraham Valles, MD · [LinkedIn](https://www.linkedin.com/in/abraham-valles-75560a3b1/)
+
+## Documentación técnica (español)
 
 Servidor FastAPI desplegado en Google Cloud Run y ejecutable también en la Mac.
 Recibe preguntas y genera un briefing matutino preparado para escucharse. La captura
