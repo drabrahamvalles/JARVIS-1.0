@@ -232,7 +232,10 @@ async def test_none_responses_are_short(config, reason, message):
     assert result.respuesta == message
 
 
-async def test_flight_title_excludes_passenger_and_converts_arrival_from_config(config):
+async def test_flight_title_excludes_passenger_and_converts_arrival_from_config(
+    config, monkeypatch
+):
+    freeze_local_time(monkeypatch)
     result_data = flight_extraction(
         trip(
             leg(
@@ -255,7 +258,8 @@ async def test_flight_title_excludes_passenger_and_converts_arrival_from_config(
     assert result.respuesta == "Listo, Dr. Valles."
 
 
-async def test_flight_departure_and_arrival_are_converted_to_user_timezone(config):
+async def test_flight_departure_and_arrival_are_converted_to_user_timezone(config, monkeypatch):
+    freeze_local_time(monkeypatch)
     result_data = flight_extraction(
         trip(
             leg(
@@ -276,7 +280,8 @@ async def test_flight_departure_and_arrival_are_converted_to_user_timezone(confi
     assert result.fin == "2026-11-05 13:30"
 
 
-async def test_flight_in_same_timezone_keeps_departure_and_arrival(config):
+async def test_flight_in_same_timezone_keeps_departure_and_arrival(config, monkeypatch):
+    freeze_local_time(monkeypatch)
     result_data = flight_extraction(
         trip(
             leg(
@@ -296,7 +301,10 @@ async def test_flight_in_same_timezone_keeps_departure_and_arrival(config):
     assert result.fin == "2026-11-05 12:00"
 
 
-async def test_flight_uses_validated_model_timezones_when_airports_are_not_configured(config):
+async def test_flight_uses_validated_model_timezones_when_airports_are_not_configured(
+    config, monkeypatch
+):
+    freeze_local_time(monkeypatch)
     result_data = flight_extraction(
         trip(
             leg(
@@ -321,7 +329,10 @@ async def test_flight_uses_validated_model_timezones_when_airports_are_not_confi
     assert result.notas is None
 
 
-async def test_flight_timezone_table_accepts_city_aliases_without_airport_codes(config):
+async def test_flight_timezone_table_accepts_city_aliases_without_airport_codes(
+    config, monkeypatch
+):
+    freeze_local_time(monkeypatch)
     result_data = flight_extraction(
         trip(
             leg(
@@ -341,7 +352,10 @@ async def test_flight_timezone_table_accepts_city_aliases_without_airport_codes(
     assert result.notas is None
 
 
-async def test_flight_keeps_local_times_and_warns_when_timezones_cannot_be_resolved(config):
+async def test_flight_keeps_local_times_and_warns_when_timezones_cannot_be_resolved(
+    config, monkeypatch
+):
+    freeze_local_time(monkeypatch)
     result_data = flight_extraction(
         trip(
             leg(
@@ -453,7 +467,8 @@ async def test_explicit_outbound_selects_past_trip(config, monkeypatch):
     assert result.fin == "2026-10-22 13:00"
 
 
-async def test_uncertain_connection_keeps_event_and_adds_review_note(config):
+async def test_uncertain_connection_keeps_event_and_adds_review_note(config, monkeypatch):
+    freeze_local_time(monkeypatch)
     connected_trip = trip(
         leg(
             hora_salida="10:00",
