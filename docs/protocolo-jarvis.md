@@ -18,8 +18,8 @@ en pruebas.
 |---|---|---|
 | 0 | Repositorio, cuentas, AGENTS.md | Validada (23/10/2026) |
 | 1 | Preguntas por voz, zona horaria, elección de modelo | Validada (24/10/2026) |
-| 2 | Briefing al apagar la alarma | En validación |
-| 2.5 | Captura de pantalla a calendario y recordatorios | En validación |
+| 2 | Briefing al apagar la alarma | Validada (26/11/2026) |
+| 2.5 | Captura de pantalla a calendario y recordatorios | Validada (26/11/2026) |
 | 4 | Memoria, calendario (leer y borrar con confirmación), Gmail de solo lectura, recordatorios por voz | Siguiente |
 | 5 | WHOOP: recuperación y sueño en el briefing | Pendiente |
 | 3 | Rutas y tráfico al subir al carro | Pendiente |
