@@ -5,7 +5,7 @@ from app.timezone_state import read_timezone_state
 
 @tool
 def consultar_zona_horaria(*, context: ToolContext) -> dict[str, str | None]:
-    """Consulta el modo y la zona horaria que están activos en este momento."""
+    """Devuelve el modo y la zona horaria activos."""
     state = read_timezone_state()
     zone, origin = active_timezone(context)
     return {

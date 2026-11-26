@@ -208,7 +208,8 @@ async def test_tuesday_without_pending_items(config, monkeypatch):
     assert data["ciudad"] is None
     assert data["panorama_semana"] is None
     assert data["eventos"] == [] and data["recordatorios"] == []
-    assert "omite por completo la agenda" in create.await_args.kwargs["instructions"]
+    instructions = create.await_args.kwargs["instructions"]
+    assert "Omite la agenda si ambas listas están vacías." in instructions
 
 
 async def test_saturday_night_with_weather_and_empty_agenda_is_repaired(config, monkeypatch):
@@ -223,7 +224,7 @@ async def test_saturday_night_with_weather_and_empty_agenda_is_repaired(config, 
     model_text = (
         "Buenas noches, Dr. Valles. Hoy es sábado 24 de octubre, en Mazatlán. "
         "La mínima será de 24 grados y la máxima de 34; se recomienda llevar paraguas, "
-        "usar ropa ligera y mantenerse hidratado. No hay clima disponible."
+        "usar ropa ligera y mantenerse hidratado. No pude consultar el pronóstico de hoy."
     )
     briefing, _ = service(config, model_text)
     request = BriefingRequest(
@@ -249,7 +250,6 @@ async def test_saturday_night_with_weather_and_empty_agenda_is_repaired(config, 
         "La mínima será de 24 grados y la máxima de 34; se recomienda llevar paraguas, "
         "usar ropa ligera y mantenerse hidratado. Hoy no tiene pendientes."
     )
-    assert "No hay clima disponible" not in result
 
 
 async def test_two_validation_errors_use_deterministic_fallback(config, monkeypatch, caplog):
@@ -348,13 +348,13 @@ async def test_open_meteo_failure_still_generates_briefing(config, monkeypatch, 
     caplog.set_level(logging.WARNING, logger="app.briefing")
 
     assert await briefing.create(request, context) == (
-        "Buenos días, Dr. Valles. No hay clima disponible. Hoy no tiene pendientes."
+        "Buenos días, Dr. Valles. No pude consultar el pronóstico de hoy. Hoy no tiene pendientes."
     )
 
     data = trusted_data(create)
     assert data["clima_hoy"] is None
     assert data["recomendaciones_ropa"] == []
-    assert "omite por completo el clima" in create.await_args.kwargs["instructions"]
+    assert "Omite el clima si clima_hoy es nulo." in create.await_args.kwargs["instructions"]
     assert "private-location-and-event" not in caplog.text
     assert "kind=RuntimeError" in caplog.text
 

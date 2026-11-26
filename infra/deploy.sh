@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+
+project="${1:-<PROYECTO>}"
+service_account="${2:-<CUENTA_DE_SERVICIO>}"
+
+if [ "$#" -ne 2 ] || [ "$project" = '<PROYECTO>' ] || [ "$service_account" = '<CUENTA_DE_SERVICIO>' ]; then
+    printf 'Ejecuta %s con el ID del proyecto y el correo de la cuenta de servicio.\n' "$0" >&2
+    exit 2
+fi
+
+cd "$(dirname "$0")/.."
+
+gcloud run deploy jarvis \
+    --source=. \
+    --project="$project" \
+    --region=us-central1 \
+    --allow-unauthenticated \
+    --min-instances=0 \
+    --max-instances=1 \
+    --cpu=1 \
+    --memory=256Mi \
+    --concurrency=80 \
+    --timeout=300 \
+    --execution-environment=gen1 \
+    --cpu-throttling \
+    --cpu-boost \
+    --set-env-vars=HOST=0.0.0.0 \
+    --set-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest,JARVIS_TOKEN=JARVIS_TOKEN:latest \
+    --service-account="$service_account" \
+    --quiet

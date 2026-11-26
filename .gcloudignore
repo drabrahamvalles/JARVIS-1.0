@@ -16,6 +16,8 @@ data
 data/**
 tests
 tests/**
+docs/
+infra/
 requirements-dev.txt
 AGENTS.md
 README.md

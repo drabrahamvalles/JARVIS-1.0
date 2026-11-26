@@ -98,7 +98,7 @@ def test_manual_mode_and_return_to_automatic_in_same_context(resolver, config):
     assert obtener_hora_actual(context=context)["zona_horaria"] == "America/New_York"
 
     assert volver_a_automatico() == {"ok": True, "modo": "automatico"}
-    # El mismo contexto conserva la alternativa automática calculada al iniciar la petición.
+    # Al volver a automático, se recupera la zona de la petición original.
     assert obtener_hora_actual(context=context)["zona_horaria"] == "America/Chicago"
     automatic = resolver.resolve(houston_request, config)
     assert automatic.zona_horaria == "America/Chicago"

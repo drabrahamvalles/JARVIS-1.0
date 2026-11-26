@@ -32,7 +32,7 @@ class CapturaError(Exception):
 
 
 class ImagenDemasiadoGrandeError(CapturaError):
-    """La imagen supera el límite configurado."""
+    """La imagen decodificada supera el límite de bytes."""
 
 
 class ImagenInvalidaError(CapturaError):

@@ -116,7 +116,7 @@ class Brain:
         self._conversation_lock = asyncio.Lock()
 
     async def ask(self, request: AskRequest, context: ToolContext) -> str:
-        # Serializar conserva un orden conversacional inequívoco para el único usuario de JARVIS.
+        # El bloqueo evita que dos preguntas se mezclen en el historial.
         started_at = time.perf_counter()
         async with self._conversation_lock:
             return await self._ask_locked(request, context, started_at)

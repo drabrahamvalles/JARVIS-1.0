@@ -5,8 +5,7 @@ Dr. Valles, médico mexicano, principiante en programación (aprendiendo R y cie
 Explícame cada decisión en español, en lenguaje simple, y por qué se hace así.
 
 ## Cómo trabajamos
-- El arquitecto es Claude, en otra conversación: diseña y da las órdenes.
-- Tú (Codex) implementas, pruebas y despliegas.
+- Claude diseña el plan en otra conversación. Codex lo implementa, prueba y despliega.
 - Si una orden contradice este archivo o ves una mejor opción, no la cambies por tu cuenta:
   explica la alternativa y espera mi decisión.
 - Antes de programar, muéstrame el plan y espera mi aprobación.
@@ -20,8 +19,7 @@ Clientes: Atajos de iOS (iPhone y Mac), programa "Hey Jarvis" en la Mac y, despu
 satélites de voz en el cuarto y el consultorio.
 
 ## Reglas
-- Nunca pongas llaves en el código: variables de entorno, y mantén .env.example al día.
-- Nunca me pidas que pegue llaves o tokens en el chat; yo los escribo en .env o en Cloud Run.
+- Guardo las llaves y los tokens en `.env` o en Cloud Run. Nunca los pongas en el código ni me los pidas por chat. Mantén `.env.example` al día con los nombres de las variables.
 - Todo endpoint, excepto /health, exige el encabezado Authorization: Bearer JARVIS_TOKEN.
 - Una herramienta por archivo en app/tools/.
 - Escribe pruebas en tests/ para cada herramienta y ejecútalas antes de dar algo por terminado.

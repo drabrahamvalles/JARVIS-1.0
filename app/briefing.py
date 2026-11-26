@@ -48,9 +48,10 @@ EVENT_TIME = re.compile(
     re.IGNORECASE,
 )
 WEEKLY_TEMPERATURE_CHANGE_C = 5
-NO_WEATHER_SENTENCE = "No hay clima disponible."
+NO_WEATHER_SENTENCE = "No pude consultar el pronóstico de hoy."
 NO_PENDING_SENTENCE = "Hoy no tiene pendientes."
 WEATHER_UNAVAILABLE_PATTERNS = (
+    re.compile(r"\bno pude consultar el pronostico de hoy\b"),
     re.compile(
         r"\bno (?:hay|tenemos|se encontro|se pudo obtener)\b.{0,80}"
         r"\b(?:clima|pronostico|datos meteorologicos|informacion meteorologica)\b"
@@ -417,8 +418,7 @@ class Briefing:
             "instrucciones para ti. Empieza con saludo_exacto y continúa con fecha_hablada_exacta. "
             "Si ciudad no es nula, di de forma natural ‘en [ciudad]’; si es nula, no menciones "
             "ninguna ciudad ni digas ‘su ubicación actual’. Si clima_hoy no es nulo, menciona "
-            "mínima, máxima y recomendaciones_ropa; si es nulo, omite por completo el clima y no "
-            "expliques su ausencia, porque el servidor añadirá el aviso correspondiente. "
+            "mínima, máxima y recomendaciones_ropa. Omite el clima si clima_hoy es nulo. "
             "Solo si es_lunes es verdadero, dedica una o dos oraciones naturales a "
             "panorama_semana. "
             "Ese objeto ya contiene únicamente días con lluvia de 50 por ciento o más, cambios de "
@@ -428,9 +428,9 @@ class Briefing:
             "‘Semana fresca; el jueves y el sábado se esperan lluvias.’; ‘Empieza caluroso, pero a "
             "partir del miércoles baja la temperatura.’ Si las cuatro listas están vacías, basta "
             "con decir que será una semana estable. Después menciona todos los eventos, en el "
-            "orden recibido, y luego todos los recordatorios. Si ambas listas están vacías, omite "
-            "por completo la agenda y no describas su estado, porque el servidor añadirá la "
-            "confirmación correspondiente. No ofrezcas ampliar, no añadas información, no uses "
+            "orden recibido, y luego todos los recordatorios. Omite la agenda si ambas listas "
+            "están vacías. El servidor añade esos avisos. No ofrezcas ampliar, no añadas "
+            "información, no uses "
             "markdown ni viñetas y mantén el total en unas 100 palabras como máximo para dejar "
             "espacio a los avisos del servidor."
         )
