@@ -23,7 +23,7 @@ el contenedor abra el puerto TCP.
 
 ## Desplegar desde la Mac
 
-1. Autentica `gcloud` con una cuenta con permiso de despliegue. Comprueba que los dos secretos ya existen y que la cuenta de ejecución puede leerlos.
+1. Autentica `gcloud` con una cuenta con permiso de despliegue. Usa la cuenta dedicada de JARVIS, con acceso a la base `(default)` y a los dos secretos.
 2. Desde la raíz del repositorio, sustituye los marcadores y ejecuta:
 
    ```sh
@@ -45,5 +45,12 @@ con `--allow-unauthenticated`.
 
 Cloud Run proporciona `PORT`. La documentación interactiva de la API se muestra
 al ejecutar el servidor en la Mac con el host local predeterminado.
-`data/estado.json` vive en el almacenamiento temporal del contenedor y se
-puede perder al reiniciar o desplegar.
+
+## Firestore
+
+La memoria y la zona horaria usan Firestore Standard en modo nativo, base
+`(default)` en `us-central1`. El campo `expira_en` del grupo
+`turnos_conversacion` tiene TTL. La cuenta de ejecución usa el rol personalizado
+`jarvisFirestoreRuntime`, condicionado a esta base. Solo puede leer, consultar y
+escribir documentos y ejecutar las transacciones necesarias. La cuenta conserva
+acceso de lectura a los secretos `OPENAI_API_KEY` y `JARVIS_TOKEN`.

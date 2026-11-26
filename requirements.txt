@@ -7,3 +7,4 @@ timezonefinder==9.2.0
 python-dotenv==1.2.4
 tzdata==2026.5
 httpx==0.28.1
+google-cloud-firestore==2.34.1

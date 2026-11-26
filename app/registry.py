@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError, create_model
 from starlette.concurrency import run_in_threadpool
 
 from app.context import ToolContext
+from app.timezone_state import TimezoneWriteError
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,7 @@ class ToolRegistry:
             if annotation is None:
                 raise ValueError(f"Falta tipo para {name}.{parameter.name}")
             if parameter.name == "context":
-                if annotation is not ToolContext:
+                if annotation not in (ToolContext, ToolContext | None):
                     raise ValueError("context debe tener tipo ToolContext")
                 inject_context = True
                 continue
@@ -117,6 +118,8 @@ class ToolRegistry:
                 else:
                     result = await run_in_threadpool(registered.handler, **kwargs)
             return json.dumps(result, ensure_ascii=False, allow_nan=False)
+        except TimezoneWriteError:
+            raise
         except Exception as exc:
             # Los errores pueden incluir texto clínico o secretos: registrar solo el tipo.
             logger.warning("tool_failed tool=%s kind=%s", name, type(exc).__name__)

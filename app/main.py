@@ -22,6 +22,7 @@ from app.schemas import (
     CapturaResponse,
 )
 from app.settings import ROOT, AppConfig, Secrets, load_config, load_secrets, runtime_environment
+from app.storage import Store, build_store
 from app.tools.captura import (
     Captura,
     CapturaError,
@@ -33,8 +34,11 @@ logger = logging.getLogger(__name__)
 bearer = HTTPBearer(auto_error=False)
 
 
-def create_app(*, config: AppConfig | None = None, secrets: Secrets | None = None) -> FastAPI:
-    host = (runtime_environment().get("HOST") or "127.0.0.1").strip()
+def create_app(
+    *, config: AppConfig | None = None, secrets: Secrets | None = None, store: Store | None = None
+) -> FastAPI:
+    env = runtime_environment()
+    host = (env.get("HOST") or "127.0.0.1").strip()
     expose_docs = host == "127.0.0.1"
 
     @asynccontextmanager
@@ -43,7 +47,8 @@ def create_app(*, config: AppConfig | None = None, secrets: Secrets | None = Non
         app.state.secrets = secrets if secrets is not None else load_secrets()
         registry = ToolRegistry.discover()
         personality = (ROOT / "config/personalidad.md").read_text(encoding="utf-8")
-        resolver = await run_in_threadpool(TimezoneResolver)
+        storage = store if store is not None else build_store(env)
+        resolver = await run_in_threadpool(TimezoneResolver, storage)
         app.state.resolver = resolver
         client = None
         app.state.brain = None
@@ -56,7 +61,9 @@ def create_app(*, config: AppConfig | None = None, secrets: Secrets | None = Non
                     timeout=20.0,
                     max_retries=1,
                 )
-                app.state.brain = Brain(client, app.state.config, personality, registry)
+                app.state.brain = Brain(
+                    client, app.state.config, personality, registry, store=storage
+                )
                 app.state.briefing = Briefing(client, app.state.config, personality)
                 app.state.captura = Captura(client, app.state.config, personality)
             else:

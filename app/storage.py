@@ -1,0 +1,171 @@
+import json
+import logging
+import os
+import re
+import threading
+from dataclasses import asdict
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Protocol
+from urllib.parse import urlsplit
+
+from google.api_core.retry import Retry
+from google.cloud import firestore
+
+from app import timezone_state
+from app.timezone_state import TimezoneState
+
+MAX_TURNS = 10
+RETENTION = timedelta(days=7)
+DEFAULT_USER = "principal"
+RPC_TIMEOUT = 2.0
+RPC_RETRY = Retry(initial=0.1, maximum=0.5, timeout=2.0)
+_LOCAL_HISTORY_LOCK = threading.RLock()
+
+
+class Store(Protocol):
+    def read_history(self) -> list[dict[str, str]]: ...
+    def append_turn(self, question: str, answer: str) -> None: ...
+    def read_timezone(self) -> TimezoneState: ...
+    def write_timezone(self, state: TimezoneState) -> None: ...
+
+
+def _unexpired(turns: list[dict], user_id: str, now: datetime) -> list[dict]:
+    return [turn for turn in turns if turn["usuario_id"] == user_id and turn["expira_en"] > now]
+
+
+def _messages(turns: list[dict]) -> list[dict[str, str]]:
+    return [
+        message
+        for turn in turns
+        for message in (
+            {"role": "user", "content": turn["pregunta"]},
+            {"role": "assistant", "content": turn["respuesta"]},
+        )
+    ]
+
+
+class LocalStore:
+    def __init__(self, user_id: str, state_path: Path) -> None:
+        self.user_id = user_id
+        user_path = state_path.parent / "usuarios" / user_id
+        self.history_path = user_path / "historial.json"
+        self.state_path = state_path if user_id == DEFAULT_USER else user_path / "estado.json"
+
+    def _read_turns(self, now: datetime) -> list[dict]:
+        try:
+            saved = json.loads(self.history_path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return []
+        for turn in saved:
+            turn["expira_en"] = datetime.fromisoformat(turn["expira_en"])
+        return _unexpired(saved, self.user_id, now)
+
+    def read_history(self) -> list[dict[str, str]]:
+        with _LOCAL_HISTORY_LOCK:
+            return _messages(self._read_turns(datetime.now(UTC))[-MAX_TURNS:])
+
+    def append_turn(self, question: str, answer: str) -> None:
+        with _LOCAL_HISTORY_LOCK:
+            now = datetime.now(UTC)
+            turns = self._read_turns(now)[-(MAX_TURNS - 1) :]
+            turns.append(
+                {
+                    "usuario_id": self.user_id,
+                    "pregunta": question,
+                    "respuesta": answer,
+                    "expira_en": now + RETENTION,
+                }
+            )
+            for turn in turns:
+                turn["expira_en"] = turn["expira_en"].isoformat()
+            timezone_state.write_json_atomically(self.history_path, turns)
+
+    def read_timezone(self) -> TimezoneState:
+        return timezone_state.read_timezone_state(self.state_path, strict=True)
+
+    def write_timezone(self, state: TimezoneState) -> None:
+        timezone_state.write_timezone_state(state, self.state_path)
+
+
+def _stage_firestore_turn(transaction, counter, turns, turn):
+    snapshot = counter.get(transaction=transaction, retry=RPC_RETRY, timeout=RPC_TIMEOUT)
+    sequence = snapshot.to_dict()["siguiente_turno"] if snapshot.exists else 0
+    transaction.set(turns.document(str(sequence % MAX_TURNS)), {**turn, "turno": sequence})
+    transaction.set(counter, {"usuario_id": turn["usuario_id"], "siguiente_turno": sequence + 1})
+
+
+class FirestoreStore:
+    def __init__(
+        self, user_id: str, *, project: str | None = None, client: firestore.Client | None = None
+    ) -> None:
+        self.user_id = user_id
+        self._project = project
+        self._client = client
+        self._client_lock = threading.Lock()
+
+    @property
+    def client(self) -> firestore.Client:
+        with self._client_lock:
+            if self._client is None:
+                self._client = firestore.Client(project=self._project, database="(default)")
+            return self._client
+
+    @property
+    def _user(self):
+        return self.client.collection("usuarios").document(self.user_id)
+
+    def read_history(self) -> list[dict[str, str]]:
+        query = self._user.collection("turnos_conversacion").order_by("turno").limit(MAX_TURNS)
+        snapshots = query.get(retry=RPC_RETRY, timeout=RPC_TIMEOUT)
+        rows = [snapshot.to_dict() for snapshot in snapshots]
+        return _messages(_unexpired(rows, self.user_id, datetime.now(UTC)))
+
+    def append_turn(self, question: str, answer: str) -> None:
+        now = datetime.now(UTC)
+        user = self._user
+        firestore.transactional(_stage_firestore_turn)(
+            self.client.transaction(max_attempts=2),
+            user.collection("estado").document("memoria"),
+            user.collection("turnos_conversacion"),
+            {
+                "usuario_id": self.user_id,
+                "pregunta": question,
+                "respuesta": answer,
+                "creado_en": now,
+                "expira_en": now + RETENTION,
+            },
+        )
+
+    def read_timezone(self) -> TimezoneState:
+        reference = self._user.collection("estado").document("zona_horaria")
+        snapshot = reference.get(retry=RPC_RETRY, timeout=RPC_TIMEOUT)
+        data = snapshot.to_dict()
+        if not data or data.get("usuario_id") != self.user_id:
+            return TimezoneState()
+        return timezone_state.decode_timezone_state(data)
+
+    def write_timezone(self, state: TimezoneState) -> None:
+        reference = self._user.collection("estado").document("zona_horaria")
+        reference.set(
+            {"usuario_id": self.user_id, **asdict(state)}, retry=RPC_RETRY, timeout=RPC_TIMEOUT
+        )
+
+
+def build_store(env: dict[str, str]) -> Store:
+    user_id = env.get("JARVIS_USER_ID") or DEFAULT_USER
+    if not re.fullmatch(r"[a-zA-Z0-9_-]{1,64}", user_id):
+        raise ValueError("JARVIS_USER_ID debe ser un identificador alfanumérico válido")
+    emulator = os.environ.get("FIRESTORE_EMULATOR_HOST")
+    if env.get("K_SERVICE") and emulator:
+        raise ValueError("FIRESTORE_EMULATOR_HOST solo se admite en local")
+    if emulator:
+        host = urlsplit(f"//{emulator}").hostname
+        if host not in {"127.0.0.1", "::1", "localhost"}:
+            raise ValueError("El emulador de Firestore debe estar en la Mac")
+    if env.get("K_SERVICE") or emulator:
+        sdk_logger = logging.getLogger("google.cloud.firestore_v1")
+        sdk_logger.handlers = [logging.NullHandler()]
+        sdk_logger.propagate = False
+        return FirestoreStore(user_id, project="jarvis-local" if emulator else None)
+    return LocalStore(user_id, timezone_state.STATE_PATH)

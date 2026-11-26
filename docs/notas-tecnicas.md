@@ -189,10 +189,10 @@ la zona IANA y el servidor la valida con `zoneinfo.available_timezones()`. Si la
 ciudad es ambigua, JARVIS pide el país o la región antes de cambiarla. También pide
 aclaración si la zona es inválida.
 
-El modo manual se conserva en `data/estado.json`. Toda la carpeta `data/` está
-excluida de Git. La escritura es atómica para no dejar un JSON parcial. El reloj
-consulta el estado activo en cada ejecución, incluso si el modo cambió durante
-la misma petición.
+En Cloud Run, Firestore conserva el modo manual y la zona por usuario. En la Mac,
+el usuario principal conserva su estado en `data/estado.json`. Toda la carpeta
+`data/` está excluida de Git. Un cambio hecho por una herramienta se aplica
+desde esa misma petición.
 
 ## Agregar herramientas
 
@@ -217,8 +217,8 @@ Los esquemas se generan con Pydantic y el SDK oficial en modo estricto. Solo se
 ejecutan nombres registrados y argumentos validados. El cerebro devuelve los
 resultados a Responses, conserva los elementos de razonamiento y permite hasta
 tres rondas de herramientas antes de solicitar una respuesta final sin herramientas.
-Los errores no exponen datos internos. Las herramientas de zona sólo escriben el
-estado local aprobado. Cualquier herramienta nueva es código local de confianza.
+Los errores no exponen datos internos. Las herramientas de zona guardan el estado
+cuando el usuario pide fijar la zona o volver a automático.
 
 Referencia: [function calling](https://developers.openai.com/api/docs/guides/function-calling).
 
@@ -235,11 +235,25 @@ Las pruebas cubren HTTP, autenticación, fechas de Atajos, clima, reglas de ropa
 agenda, captura visual, salida estructurada, límite de imagen, recordatorios con y sin
 fecha, títulos y zonas horarias de vuelos, ubicación predeterminada, seis ciudades por
 coordenadas, horario de verano, memoria, enrutamiento, costos, privacidad del registro,
-descubrimiento de módulos y function calling. Las pruebas simulan Open-Meteo y
-OpenAI y se ejecutan sin red ni crédito.
+descubrimiento de módulos y function calling. Las pruebas simulan Open-Meteo,
+OpenAI y Firestore. Se ejecutan sin red ni crédito.
 
-El servidor conserva en memoria los últimos diez turnos completos y los pierde al
-reiniciar. Sólo añade intercambios exitosos. Los resultados de herramientas, las
-coordenadas y las etiquetas de dispositivo quedan fuera del historial. El servidor
-envía `store=False` a Responses. Las políticas de retención del proveedor aplican
-a esas llamadas.
+## Memoria persistente
+
+`/ask` conserva hasta diez pares de pregunta y respuesta por usuario. Los turnos
+dejan de usarse a los siete días. En Cloud Run, Firestore elimina por TTL los
+documentos expirados. El estado de zona horaria dura hasta que el usuario lo
+cambie. El despliegue inicial empieza con historial vacío y zona automática.
+
+La Mac usa archivos bajo `data/`. Para usar el emulador, exporta
+`FIRESTORE_EMULATOR_HOST=127.0.0.1:8080` antes de arrancar JARVIS. En Cloud Run
+el servidor elige Firestore por la variable `K_SERVICE` de la plataforma.
+
+Si falla una lectura de almacenamiento, `/ask` continúa sin historial y resuelve
+la zona por coordenadas cuando están disponibles. Si falla el guardado de un turno,
+se conserva la respuesta y el registro solo indica la operación y el tipo de error.
+Si falla un cambio explícito de zona, responde «No pude guardarlo, Dr. Valles.».
+
+Las coordenadas, la etiqueta de dispositivo y los resultados directos de las
+herramientas quedan fuera del historial. El servidor envía `store=False` a
+Responses. Las políticas de retención del proveedor aplican a esas llamadas.
