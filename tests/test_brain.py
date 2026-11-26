@@ -1,6 +1,7 @@
 import json
 import logging
 from copy import deepcopy
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -15,6 +16,7 @@ from app.main import create_app
 from app.registry import ToolRegistry
 from app.schemas import AskRequest
 from app.settings import ROOT, Secrets
+from app.tools.fijar_zona_horaria import fijar_zona_horaria
 from tests.conftest import AUTH, TOKEN
 
 CONTEXT = ToolContext("America/Monterrey", "por_defecto", "Monterrey")
@@ -100,7 +102,9 @@ def test_real_sdk_function_call_roundtrip_through_api(config, monkeypatch):
     app = create_app(config=config, secrets=Secrets(openai_api_key="test-key", jarvis_token=TOKEN))
     with TestClient(app) as local:
         result = local.post(
-            "/ask", headers=AUTH, json={"texto": "¿Qué hora es?", "lat": 35.6762, "lon": 139.6503}
+            "/ask",
+            headers=AUTH,
+            json={"texto": "¿Qué hora es en Tokio?", "lat": 35.6762, "lon": 139.6503},
         )
         assert result.status_code == 200
         assert result.json() == {"respuesta": "Son las nueve en Tokio, Dr. Valles."}
@@ -115,9 +119,58 @@ def test_real_sdk_function_call_roundtrip_through_api(config, monkeypatch):
     assert json.loads(result_item["output"])["zona_horaria"] == "Asia/Tokyo"
     assert any(item.get("type") == "function_call" for item in requests[1]["input"][:-1])
     instructions = requests[0]["instructions"]
-    assert "Dr. Valles" in instructions and "cuatro oraciones" in instructions
+    assert "Dr. Valles" in instructions and "preguntas simples en una sola oración" in instructions
+    assert "cuando la pregunta sea médica" in instructions and "«por qué»" in instructions
+    assert config.zona_casa in instructions
     assert "Asia/Tokyo" in instructions
     assert "ambiguo" in instructions and "país o región" in instructions
+
+
+@pytest.mark.parametrize("alternate_home", [False, True], ids=["yaml", "casa-distinta"])
+@pytest.mark.parametrize(
+    "case,question",
+    [
+        ("casa", "¿Qué hora es?"),
+        ("manual", "Dime la hora"),
+        ("viaje", "Jarvis, ¿qué hora es?"),
+        ("zona-explícita", "¿Qué hora es y en qué zona horaria estoy?"),
+    ],
+)
+async def test_local_clock_uses_configured_home_zone(
+    config, monkeypatch, alternate_home, case, question
+):
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 11, 26, 16, 50, tzinfo=tz)
+
+    monkeypatch.setattr("app.tools.clock.datetime", FrozenDateTime)
+    if alternate_home:
+        different_zone = "Europe/Madrid" if config.zona_casa != "Europe/Madrid" else "Asia/Tokyo"
+        config = config.model_copy(update={"zona_casa": different_zone})
+    home = config.zona_casa
+    home_city = home.rsplit("/", 1)[-1].replace("_", " ")
+    travel_zone, travel_city = (
+        ("Europe/Madrid", "Madrid") if home == "Asia/Tokyo" else ("Asia/Tokyo", "Tokyo")
+    )
+    zone = travel_zone if case == "viaje" else home
+    context = ToolContext(zone, "coordenadas", config.ciudad)
+    if case == "manual":
+        assert fijar_zona_horaria(home_city, home)["ok"]
+    suffix = {
+        "casa": "",
+        "manual": f" en la zona horaria de {home_city}",
+        "viaje": f" en la zona horaria de {travel_city}",
+        "zona-explícita": f" en la zona horaria {home}",
+    }[case]
+    create = AsyncMock()
+    brain = make_brain(config, create)
+
+    answer = await brain.ask(AskRequest(texto=question), context)
+
+    assert answer == f"Son las 4:50 de la tarde{suffix}, Dr. Valles."
+    assert brain._history[-1] == {"role": "assistant", "content": answer}
+    create.assert_not_awaited()
 
 
 async def test_history_is_kept_and_device_is_not_persisted(config):
@@ -205,7 +258,6 @@ async def test_medical_questions_route_to_deep_model(config, question):
 @pytest.mark.parametrize(
     "question",
     [
-        "¿Qué hora es?",
         "¿Cómo estará el clima hoy?",
         "Recuérdame comprar café mañana.",
     ],

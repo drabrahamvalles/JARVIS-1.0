@@ -93,6 +93,7 @@ class AppConfig(BaseModel):
     latitud_por_defecto: float = Field(ge=-90, le=90, allow_inf_nan=False)
     longitud_por_defecto: float = Field(ge=-180, le=180, allow_inf_nan=False)
     zona_horaria_por_defecto: str
+    zona_casa: str = Field(default_factory=lambda data: data["zona_horaria_por_defecto"])
     zonas_horarias_vuelos: dict[str, FlightTimezone]
     reglas_ropa: ClothingRules
     modo_zona_horaria: Literal["automatico", "fijo"] = "automatico"
@@ -107,7 +108,7 @@ class AppConfig(BaseModel):
     hora_recordatorio_por_defecto: str = "09:00"
     max_rondas_herramientas: int = Field(default=3, ge=0, le=6)
 
-    @field_validator("zona_horaria_por_defecto")
+    @field_validator("zona_horaria_por_defecto", "zona_casa")
     @classmethod
     def valid_timezone(cls, value: str) -> str:
         try:

@@ -8,9 +8,15 @@ from app.__main__ import build_log_config, main
 from app.settings import AppConfig, load_config, load_secrets, runtime_environment
 
 
-def test_invalid_timezone_fails_early(config):
-    with pytest.raises(ValidationError):
-        AppConfig.model_validate({**config.model_dump(), "zona_horaria_por_defecto": "Bogus/Zone"})
+@pytest.mark.parametrize("field", ["zona_horaria_por_defecto", "zona_casa"])
+def test_invalid_timezone_fails_early(config, field):
+    with pytest.raises(ValidationError, match="IANA válida"):
+        AppConfig.model_validate({**config.model_dump(), field: "Bogus/Zone"})
+
+
+def test_config_without_home_zone_uses_default_timezone(config):
+    legacy = AppConfig.model_validate(config.model_dump(exclude={"zona_casa"}))
+    assert legacy.zona_casa == config.zona_horaria_por_defecto
 
 
 def test_environment_overrides_dotenv_without_exposing_secrets(tmp_path, monkeypatch):
@@ -69,8 +75,11 @@ def test_config_is_read_from_yaml(tmp_path, config):
     contents = config.model_dump()
     contents["modelo_rapido"] = "otro-modelo"
     contents["precios_modelos"]["otro-modelo"] = contents["precios_modelos"]["gpt-6-luna"]
+    contents["zona_casa"] = "Europe/Madrid"
     path.write_text(yaml.safe_dump(contents))
-    assert load_config(path).modelo_rapido == "otro-modelo"
+    loaded = load_config(path)
+    assert loaded.modelo_rapido == "otro-modelo"
+    assert loaded.zona_casa == "Europe/Madrid"
 
 
 def test_selected_models_require_pricing(config):

@@ -138,6 +138,7 @@ ciudad: "Monterrey"
 latitud_por_defecto: 25.6866
 longitud_por_defecto: -100.3161
 zona_horaria_por_defecto: "America/Monterrey"
+zona_casa: "America/Monterrey"
 modo_zona_horaria: "automatico"
 zonas_horarias_vuelos:
   MEX:

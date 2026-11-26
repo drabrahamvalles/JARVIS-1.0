@@ -51,6 +51,5 @@ que las rutas.
 
 ## Pendientes con fecha
 
-- Antes de la fase 4: cambiar JARVIS_TOKEN.
 - Antes del 21/01/2027: activar la cuenta de pago de Google Cloud y usar
   el crédito restante.
