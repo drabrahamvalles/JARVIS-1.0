@@ -36,4 +36,4 @@ satélites de voz en el cuarto y el consultorio.
 
 ## Protocolo
 Construimos por fases según docs/protocolo-jarvis.md.
-Fase actual: 4 (4.1 hecha; 4.2 calendario y 4.4 recordatorios en validación; 4.3 Gmail pendiente).
+Fase actual: 4 (4.1 y 4.2 hechas; 4.3 Gmail de solo lectura por autorizar; 4.4 recordatorios: falta el Atajo).

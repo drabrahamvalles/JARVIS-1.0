@@ -68,3 +68,23 @@ acceso de lectura a los secretos `OPENAI_API_KEY` y `JARVIS_TOKEN`.
    ```
 
 4. Despliega con `./infra/deploy.sh`: el script agrega el secreto si existe.
+
+## Gmail de solo lectura (fase 4.3)
+
+Gmail no acepta la cuenta de servicio en una cuenta personal, así que se usa un
+cliente OAuth propio con el alcance `gmail.readonly`.
+
+1. Habilita la API: `gcloud services enable gmail.googleapis.com --project='<PROYECTO>'`. No tiene costo.
+2. En la consola, «Google Auth Platform» → Branding: nombre `JARVIS`, tu correo como soporte y contacto. Audiencia: «Externo».
+3. Acceso a datos → agrega el permiso `https://www.googleapis.com/auth/gmail.readonly`.
+4. Clientes → Crear cliente → «App de escritorio». Descarga el JSON (queda en Descargas; nunca lo subas al repo).
+5. Audiencia → «Publicar app» (estado «En producción»). Sin verificación, Google muestra una advertencia la primera vez, pero el permiso no vence a los 7 días como en modo de prueba.
+6. Autoriza y guarda el token en Secret Manager (abre el navegador; el token nunca se imprime):
+
+   ```sh
+   .venv/bin/python scripts/autorizar_gmail.py ~/Downloads/client_secret_XXXX.json '<PROYECTO>' '<CUENTA_DE_SERVICIO>'
+   ```
+
+7. Despliega con `./infra/deploy.sh`: el script agrega `JARVIS_GMAIL` si existe.
+
+Para revocar el acceso: myaccount.google.com → Seguridad → «Apps de terceros con acceso a tu cuenta» → JARVIS → Quitar acceso.

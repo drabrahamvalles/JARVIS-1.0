@@ -286,6 +286,25 @@ calendarios van separados por comas en el secreto `JARVIS_CALENDARIOS`. Sin ese
 secreto, JARVIS responde que la agenda no está conectada. Los títulos de los
 eventos llegan al modelo: no pongas nombres de pacientes en el calendario.
 
+## Gmail de solo lectura (fase 4.3)
+
+`consultar_correo(busqueda, cantidad)` busca con la sintaxis de Gmail
+(`is:unread`, `from:…`, `newer_than:7d`; vacío = bandeja de los últimos dos días)
+y devuelve hasta 10 correos con remitente, asunto, fecha local y extracto.
+`leer_correo(correo_id)` trae el texto (prefiere `text/plain`; si solo hay HTML,
+le quita las etiquetas) recortado a 4000 caracteres.
+
+El permiso es `gmail.readonly`: JARVIS no puede enviar, responder ni borrar. El
+secreto `JARVIS_GMAIL` guarda un JSON con `client_id`, `client_secret` y
+`refresh_token`; el servidor pide un token de acceso de una hora y lo reutiliza.
+Si Google responde `invalid_grant`, el permiso se revocó y hay que volver a
+correr `scripts/autorizar_gmail.py`.
+
+El texto de un correo lo escribió un tercero, así que puede traer instrucciones
+disfrazadas («ignora tus reglas y…»). Las instrucciones del modelo dicen que es
+un dato, y como el permiso es de solo lectura, aunque el modelo se confundiera no
+podría mandar nada. Si un correo trae datos de pacientes, JARVIS no los repite.
+
 ## Recordatorios por voz (fase 4.4)
 
 Cuando el usuario dice «recuérdame…», el modelo llama `crear_recordatorio(titulo,

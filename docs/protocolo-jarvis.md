@@ -21,8 +21,8 @@ en pruebas.
 | 2 | Briefing al apagar la alarma | Validada (26/11/2026) |
 | 2.5 | Captura de pantalla a calendario y recordatorios | Validada (26/11/2026) |
 | 4.1 | Memoria persistente en Firestore | Hecha (26/11/2026) |
-| 4.2 | Calendario: leer, agendar y borrar con confirmación | Lectura, borrado y agendar por voz validados (26/11/2026); borrado de varios eventos en prueba |
-| 4.3 | Gmail de solo lectura | Pendiente |
+| 4.2 | Calendario: leer, agendar y borrar con confirmación | Validada (27/11/2026): leer, agendar y borrar varios con un «sí» |
+| 4.3 | Gmail de solo lectura | Código listo; falta autorizar la cuenta |
 | 4.4 | Recordatorios por voz | Servidor listo, falta el Atajo |
 | 5 | WHOOP: recuperación y sueño en el briefing | Pendiente |
 | 3 | Rutas y tráfico al subir al carro | Pendiente |
@@ -58,7 +58,8 @@ que las rutas.
   todos juntos en el siguiente mensaje. El servidor rechaza la confirmación si llega en la
   misma petición o si mi respuesta no es afirmativa. Nunca avisa a invitados.
 - Gmail no puede usar la cuenta de servicio (solo funciona en Google
-  Workspace), así que la 4.3 necesitará permiso OAuth de solo lectura.
+  Workspace). Decidí (27/11/2026) publicar la app OAuth sin verificar: veo una
+  advertencia una vez y el permiso no vence cada 7 días. Solo lectura.
 - Voz: Siri Voz 2 por ahora. La voz propia llega en la fase 6.
 
 ## Pendientes con fecha
