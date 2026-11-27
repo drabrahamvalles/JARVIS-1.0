@@ -4,8 +4,9 @@ import logging
 import re
 import time
 import unicodedata
+import uuid
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -140,6 +141,7 @@ class Brain:
     async def ask(self, request: AskRequest, context: ToolContext) -> str:
         # El bloqueo evita que dos preguntas se mezclen en el historial.
         started_at = time.perf_counter()
+        context = replace(context, solicitud_id=uuid.uuid4().hex, texto_usuario=request.texto)
         async with self._conversation_lock:
             history = []
             if self.store is None:
@@ -268,6 +270,16 @@ class Brain:
             "si la zona activa es manual o si es distinta de la zona de casa "
             f"({self.config.zona_casa}). Para saber el modo y la zona activos después de usar "
             "herramientas, consulta su resultado más reciente."
+            "\nAgenda: para preguntas sobre eventos, vuelos, citas o «qué tengo» usa "
+            "consultar_agenda con fechas locales AAAA-MM-DD calculadas desde fecha_hora_local; "
+            "responde con la hora local y sin leer identificadores. Si no hay eventos, dilo. "
+            "Para borrar un evento: localízalo con consultar_agenda, llama "
+            "proponer_borrado_evento y pregunta «¿Lo borro, Dr. Valles?» con título, día y hora. "
+            "Nunca llames confirmar_borrado_evento en la misma respuesta en que preguntas; solo "
+            "cuando el usuario confirme en su siguiente mensaje. Si hay varios eventos posibles, "
+            "pregunta cuál antes de proponer."
+            "\nRecordatorios: si el usuario pide «recuérdame…», llama crear_recordatorio una vez "
+            "y responde «Listo, Dr. Valles. Se lo recuerdo …» con el día y la hora."
         )
         if route.reason == "modo_cientifico":
             result += (

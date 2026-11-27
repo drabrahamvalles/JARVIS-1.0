@@ -54,3 +54,17 @@ La memoria y la zona horaria usan Firestore Standard en modo nativo, base
 `jarvisFirestoreRuntime`, condicionado a esta base. Solo puede leer, consultar y
 escribir documentos y ejecutar las transacciones necesarias. La cuenta conserva
 acceso de lectura a los secretos `OPENAI_API_KEY` y `JARVIS_TOKEN`.
+
+## Google Calendar (fase 4.2)
+
+1. Habilita la API: `gcloud services enable calendar-json.googleapis.com --project='<PROYECTO>'`. No tiene costo.
+2. En Google Calendar (web), en cada calendario: Configuración → Compartir con personas → agrega `<CUENTA_DE_SERVICIO>` con «Hacer cambios en eventos».
+3. Guarda los identificadores (normalmente el correo de cada calendario), separados por comas:
+
+   ```sh
+   printf '%s' '<CALENDARIO_1>,<CALENDARIO_2>' | gcloud secrets create JARVIS_CALENDARIOS --project='<PROYECTO>' --data-file=-
+   gcloud secrets add-iam-policy-binding JARVIS_CALENDARIOS --project='<PROYECTO>' \
+       --member='serviceAccount:<CUENTA_DE_SERVICIO>' --role=roles/secretmanager.secretAccessor
+   ```
+
+4. Despliega con `./infra/deploy.sh`: el script agrega el secreto si existe.

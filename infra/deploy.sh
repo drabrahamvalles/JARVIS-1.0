@@ -11,6 +11,12 @@ fi
 
 cd "$(dirname "$0")/.."
 
+secrets="OPENAI_API_KEY=OPENAI_API_KEY:latest,JARVIS_TOKEN=JARVIS_TOKEN:latest"
+# Los calendarios compartidos con la cuenta de servicio son opcionales (fase 4.2).
+if gcloud secrets describe JARVIS_CALENDARIOS --project="$project" >/dev/null 2>&1; then
+    secrets="$secrets,JARVIS_CALENDARIOS=JARVIS_CALENDARIOS:latest"
+fi
+
 gcloud run deploy jarvis \
     --source=. \
     --project="$project" \
@@ -26,6 +32,6 @@ gcloud run deploy jarvis \
     --cpu-throttling \
     --cpu-boost \
     --set-env-vars=HOST=0.0.0.0 \
-    --set-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest,JARVIS_TOKEN=JARVIS_TOKEN:latest \
+    --set-secrets="$secrets" \
     --service-account="$service_account" \
     --quiet

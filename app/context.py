@@ -44,6 +44,12 @@ class ToolContext:
     longitud_clima: float | None = None
     timezone_session: TimezoneSession | None = field(default=None, repr=False, compare=False)
     zona_por_coordenadas: str | None = None
+    store: Store | None = field(default=None, repr=False, compare=False)
+    # Identifica la petición /ask en curso; las confirmaciones deben llegar en otra petición.
+    solicitud_id: str = ""
+    texto_usuario: str = field(default="", repr=False)
+    # Acciones que el Atajo debe ejecutar en el iPhone (por ahora, recordatorios).
+    acciones: list[dict[str, str | None]] = field(default_factory=list, repr=False, compare=False)
 
     def read_timezone(self) -> TimezoneState:
         return self.timezone_session.state if self.timezone_session else read_timezone_state()
@@ -133,6 +139,7 @@ class TimezoneResolver:
                 TimezoneSession(self.store, state, read_failed) if self.store is not None else None
             ),
             zona_por_coordenadas=coordinates_zone,
+            store=self.store,
         )
 
     def close(self) -> None:

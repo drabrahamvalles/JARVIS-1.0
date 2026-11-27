@@ -257,3 +257,42 @@ Si falla un cambio explícito de zona, responde «No pude guardarlo, Dr. Valles.
 Las coordenadas, la etiqueta de dispositivo y los resultados directos de las
 herramientas quedan fuera del historial. El servidor envía `store=False` a
 Responses. Las políticas de retención del proveedor aplican a esas llamadas.
+
+## Agenda (fase 4.2)
+
+`/ask` puede consultar y borrar eventos de Google Calendar con tres
+herramientas:
+
+- `consultar_agenda(desde, hasta, texto)`: fechas locales `AAAA-MM-DD`, máximo
+  31 días. Devuelve hasta 25 eventos ordenados, con la hora convertida a la zona
+  activa. Si el mismo evento aparece en dos calendarios compartidos, se muestra
+  una vez.
+- `proponer_borrado_evento(evento_id)`: no borra. Guarda la propuesta en
+  Firestore (`usuarios/{id}/estado/borrado_pendiente`) durante 10 minutos y le
+  pide al modelo que pregunte.
+- `confirmar_borrado_evento()`: solo borra si la propuesta sigue vigente, se hizo
+  en una petición anterior y el texto actual del usuario es afirmativo («sí»,
+  «bórralo», «adelante») sin negación. Borra con `sendUpdates=none` para que
+  Google no escriba a los invitados.
+
+La cuenta de servicio de Cloud Run lee los calendarios que el usuario comparte
+con su correo («Hacer cambios en eventos»). Los identificadores de esos
+calendarios van separados por comas en el secreto `JARVIS_CALENDARIOS`. Sin ese
+secreto, JARVIS responde que la agenda no está conectada. Los títulos de los
+eventos llegan al modelo: no pongas nombres de pacientes en el calendario.
+
+## Recordatorios por voz (fase 4.4)
+
+Cuando el usuario dice «recuérdame…», el modelo llama `crear_recordatorio(titulo,
+cuando)`. El servidor valida la fecha (formato local `AAAA-MM-DD HH:MM`; solo la
+fecha usa 09:00; una hora pasada se rechaza) y `/ask` devuelve dos campos extra:
+
+```json
+{"respuesta": "Listo, Dr. Valles. Se lo recuerdo mañana a las 5.",
+ "recordatorio_titulo": "Revisar los labs",
+ "recordatorio_alerta": "2026-11-27 17:00"}
+```
+
+Sin recordatorio, `/ask` solo devuelve `respuesta`. Sin hora, falta
+`recordatorio_alerta`. El servidor no toca Recordatorios: el Atajo JARVIS los
+crea en el iPhone (ver [la guía del Atajo](atajos/consulta-por-voz.md)).

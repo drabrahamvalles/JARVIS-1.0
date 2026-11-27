@@ -35,5 +35,5 @@ satélites de voz en el cuarto y el consultorio.
   Python 3.13 solo para este proyecto y explícame por qué.
 
 ## Protocolo
-Construimos por fases (0 a 9) según el documento "Protocolo JARVIS".
-Fase actual: 2.5.
+Construimos por fases según docs/protocolo-jarvis.md.
+Fase actual: 4 (4.1 hecha; 4.2 calendario y 4.4 recordatorios en validación; 4.3 Gmail pendiente).

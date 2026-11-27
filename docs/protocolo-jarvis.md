@@ -20,7 +20,10 @@ en pruebas.
 | 1 | Preguntas por voz, zona horaria, elección de modelo | Validada (24/10/2026) |
 | 2 | Briefing al apagar la alarma | Validada (26/11/2026) |
 | 2.5 | Captura de pantalla a calendario y recordatorios | Validada (26/11/2026) |
-| 4 | Memoria, calendario (leer y borrar con confirmación), Gmail de solo lectura, recordatorios por voz | Siguiente |
+| 4.1 | Memoria persistente en Firestore | Hecha (26/11/2026) |
+| 4.2 | Calendario: leer y borrar con confirmación | Construida, falta conectar y validar |
+| 4.3 | Gmail de solo lectura | Pendiente |
+| 4.4 | Recordatorios por voz | Servidor listo, falta el Atajo |
 | 5 | WHOOP: recuperación y sueño en el briefing | Pendiente |
 | 3 | Rutas y tráfico al subir al carro | Pendiente |
 | 6 | Voz propia, panel web, conversación con interrupción, "Hey Jarvis" en la Mac | Pendiente |
@@ -41,12 +44,21 @@ que las rutas.
   Acción, con "Oye Siri, JARVIS" o con toque posterior.
 - Para evitar el arranque en frío uso Cloud Scheduler cada 10 minutos de
   6:00 a 22:50, en vez de una instancia mínima. Costo: 0.
-- La fase 4 usará Firestore en lugar de PostgreSQL: tiene nivel gratuito
+- La fase 4 usa Firestore en lugar de PostgreSQL: tiene nivel gratuito
   y no cobra por estar encendida. Se diseña lista para varios usuarios.
 - El modelo de captura mantiene razonamiento "low" y detalle de imagen
   "high". Prefiero que tarde unos segundos más a que lea mal un número
   de vuelo.
 - WhatsApp no usará librerías no oficiales: pueden bloquear el número.
+- Calendario: comparto mis calendarios con la cuenta de servicio de Cloud
+  Run en lugar de usar OAuth personal. No hay tokens que renovar y JARVIS
+  solo ve lo que yo comparto. Los correos de los calendarios viven en el
+  secreto JARVIS_CALENDARIOS, no en el repositorio.
+- Borrar un evento exige dos pasos: JARVIS propone, yo confirmo en el
+  siguiente mensaje. El servidor rechaza la confirmación si llega en la
+  misma petición o si mi respuesta no es afirmativa. Nunca avisa a invitados.
+- Gmail no puede usar la cuenta de servicio (solo funciona en Google
+  Workspace), así que la 4.3 necesitará permiso OAuth de solo lectura.
 - Voz: Siri Voz 2 por ahora. La voz propia llega en la fase 6.
 
 ## Pendientes con fecha

@@ -21,6 +21,9 @@ class AskRequest(BaseModel):
 
 class AskResponse(BaseModel):
     respuesta: str
+    # Si JARVIS decidió crear un recordatorio, el Atajo lo guarda en Recordatorios del iPhone.
+    recordatorio_titulo: str | None = None
+    recordatorio_alerta: str | None = None
 
 
 BriefingItem = Annotated[str, Field(min_length=1, max_length=1000, strict=True)]

@@ -77,8 +77,8 @@ def create_app(
             await run_in_threadpool(resolver.close)
 
     application = FastAPI(
-        title="JARVIS · Fase 2.5",
-        version="0.2.5",
+        title="JARVIS · Fase 4",
+        version="0.4.2",
         lifespan=lifespan,
         docs_url="/docs" if expose_docs else None,
         redoc_url="/redoc" if expose_docs else None,
@@ -103,7 +103,12 @@ def create_app(
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    @application.post("/ask", response_model=AskResponse, dependencies=[Depends(require_token)])
+    @application.post(
+        "/ask",
+        response_model=AskResponse,
+        response_model_exclude_none=True,
+        dependencies=[Depends(require_token)],
+    )
     async def ask(payload: AskRequest, request: Request) -> AskResponse:
         brain = request.app.state.brain
         if brain is None:
@@ -114,7 +119,12 @@ def create_app(
                     request.app.state.resolver.resolve, payload, request.app.state.config
                 )
                 answer = await brain.ask(payload, context)
-            return AskResponse(respuesta=answer)
+            reminder = context.acciones[-1] if context.acciones else {}
+            return AskResponse(
+                respuesta=answer,
+                recordatorio_titulo=reminder.get("titulo"),
+                recordatorio_alerta=reminder.get("alerta"),
+            )
         except (APITimeoutError, TimeoutError):
             raise HTTPException(504, "OpenAI tardó demasiado en responder") from None
         except RateLimitError:

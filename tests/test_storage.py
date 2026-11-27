@@ -215,3 +215,22 @@ def test_ask_reports_failed_explicit_zone_write(degraded_app, caplog, name, argu
     assert create.await_count == 1
     assert "operation=timezone_write kind=OSError" in caplog.text
     assert "private-storage-error" not in caplog.text
+
+
+@pytest.mark.parametrize("backend", ["archivo", "firestore"])
+def test_pending_delete_roundtrip_and_isolation(backend, tmp_path):
+    rpc = FirestoreRPC()
+
+    def make_store(user):
+        if backend == "firestore":
+            return firestore_store(rpc, user)
+        return LocalStore(user, tmp_path / "estado.json")
+
+    store, other = make_store("principal"), make_store("otro")
+    assert store.read_pending_delete() is None
+    pending = {"evento_id": "0:abc", "titulo": "Cita", "solicitud_id": "s1", "expira_en": "x"}
+    store.write_pending_delete(pending)
+    assert make_store("principal").read_pending_delete() == {"usuario_id": "principal", **pending}
+    assert other.read_pending_delete() is None
+    store.write_pending_delete(None)
+    assert store.read_pending_delete() is None
