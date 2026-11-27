@@ -1,5 +1,7 @@
 import base64
 import json
+from datetime import UTC, datetime, timedelta
+from email import message_from_bytes
 from urllib.parse import parse_qs
 
 import httpx
@@ -8,8 +10,11 @@ import pytest
 from app import gmail
 from app.context import ToolContext
 from app.gmail import Credenciales, Gmail, credentials_from_env, validate_message_id
+from app.storage import LocalStore
+from app.tools.confirmar_envio_correo import confirmar_envio_correo
 from app.tools.consultar_correo import consultar_correo
 from app.tools.leer_correo import leer_correo
+from app.tools.proponer_correo import proponer_correo
 
 CREDS = Credenciales("cliente", "secreto-de-prueba", "refresh-de-prueba")
 
@@ -52,8 +57,10 @@ MESSAGES = {
 
 
 class FakeGmail:
-    def __init__(self, token_status=200):
+    def __init__(self, token_status=200, send_status=200):
         self.token_status = token_status
+        self.send_status = send_status
+        self.sent = []
         self.token_calls = 0
         self.requests = []
 
@@ -67,9 +74,15 @@ class FakeGmail:
                 return httpx.Response(self.token_status, json={"error": "invalid_grant"})
             return httpx.Response(200, json={"access_token": "acceso", "expires_in": 3600})
         self.requests.append(request)
-        assert request.method == "GET"
         assert request.headers["Authorization"] == "Bearer acceso"
         path = request.url.path.removeprefix("/gmail/v1/users/me/")
+        if request.method == "POST" and path == "messages/send":
+            if self.send_status != 200:
+                return httpx.Response(self.send_status)
+            raw = json.loads(request.content)["raw"]
+            self.sent.append(message_from_bytes(base64.urlsafe_b64decode(raw + "==")))
+            return httpx.Response(200, json={"id": "enviado1"})
+        assert request.method == "GET"
         if path == "messages":
             ids = ["m1", "m2"][: int(request.url.params["maxResults"])]
             return httpx.Response(200, json={"messages": [{"id": i} for i in ids]})
@@ -153,3 +166,85 @@ async def test_without_configuration_or_with_revoked_token(monkeypatch):
     finally:
         gmail.set_gmail(None)
     assert result == {"ok": False, "mensaje": "Gmail no respondió; intenta más tarde."}
+
+
+def email_context(tmp_path, request_id, text=""):
+    store = LocalStore("principal", tmp_path / "estado.json")
+    return ToolContext(
+        "America/Monterrey",
+        "coordenadas",
+        "Monterrey",
+        store=store,
+        solicitud_id=request_id,
+        texto_usuario=text,
+    )
+
+
+async def test_email_is_sent_only_after_a_later_explicit_yes(fake, tmp_path):
+    ask = email_context(tmp_path, "pregunta", "mándale un correo a Ana")
+    draft = await proponer_correo(
+        ["Ana@Example.com", "ana@example.com"],
+        "Junta del lunes",
+        "Hola Ana, ¿nos vemos a las 10?\n\nDr. Abraham Valles",
+        context=ask,
+    )
+    assert draft["ok"] is True and draft["requiere_confirmacion"] is True
+    assert draft["borrador"]["para"] == ["ana@example.com"]
+    assert fake.sent == []
+
+    # El modelo intenta enviar en la misma petición: el servidor lo rechaza.
+    assert (await confirmar_envio_correo(context=ask))["ok"] is False
+    # Una duda tampoco envía.
+    for index, text in enumerate(["no, espera", "ok, pero cambia la hora", "sí, agrega a Luis"]):
+        doubt = email_context(tmp_path, f"r1-{index}", text)
+        assert (await confirmar_envio_correo(context=doubt))["ok"] is False
+    assert fake.sent == []
+
+    result = await confirmar_envio_correo(context=email_context(tmp_path, "r2", "Sí, envíalo"))
+    assert result == {
+        "ok": True,
+        "enviado": {"para": ["ana@example.com"], "asunto": "Junta del lunes"},
+    }
+    [message] = fake.sent
+    assert message["To"] == "ana@example.com"
+    assert message["Subject"] == "Junta del lunes"
+    assert "nos vemos a las 10" in message.get_payload(decode=True).decode()
+    # El borrador se consume: otro «sí» no manda un segundo correo.
+    again = await confirmar_envio_correo(context=email_context(tmp_path, "r3", "sí"))
+    assert again["ok"] is False and len(fake.sent) == 1
+
+
+async def test_draft_validation(fake, tmp_path):
+    context = email_context(tmp_path, "p")
+    assert (await proponer_correo(["Ana"], "Hola", "Texto", context=context))["ok"] is False
+    assert (await proponer_correo([], "Hola", "Texto", context=context))["ok"] is False
+    many = [f"p{n}@example.com" for n in range(6)]
+    assert (await proponer_correo(many, "Hola", "Texto", context=context))["ok"] is False
+    assert (await proponer_correo(["a@b.com"], " ", "Texto", context=context))["ok"] is False
+    assert (await proponer_correo(["a@b.com"], "Hola", "x" * 5001, context=context))["ok"] is False
+    assert context.store.read_pending_email() is None
+
+
+async def test_expired_draft_is_not_sent(fake, tmp_path):
+    context = email_context(tmp_path, "p")
+    await proponer_correo(["a@b.com"], "Hola", "Texto", context=context)
+    pending = context.store.read_pending_email()
+    pending["expira_en"] = (datetime.now(UTC) - timedelta(seconds=1)).isoformat()
+    context.store.write_pending_email({k: v for k, v in pending.items() if k != "usuario_id"})
+    result = await confirmar_envio_correo(context=email_context(tmp_path, "r", "sí"))
+    assert result["ok"] is False and fake.sent == []
+    assert context.store.read_pending_email() is None
+
+
+async def test_send_without_send_permission_says_so(tmp_path):
+    readonly = FakeGmail(send_status=403)
+    gmail.set_gmail(Gmail(CREDS, transport=httpx.MockTransport(readonly.handler)))
+    try:
+        await proponer_correo(["a@b.com"], "Hola", "Texto", context=email_context(tmp_path, "p"))
+        result = await confirmar_envio_correo(context=email_context(tmp_path, "r", "sí, mándalo"))
+    finally:
+        gmail.set_gmail(None)
+    assert result == {
+        "ok": False,
+        "mensaje": "JARVIS todavía no tiene permiso para enviar correos.",
+    }

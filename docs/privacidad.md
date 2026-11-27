@@ -5,9 +5,10 @@ autor, el Dr. Abraham Valles. No es un servicio público ni tiene otros usuarios
 
 ## Qué datos usa
 
-- **Gmail (solo lectura, `gmail.readonly`).** Busca y lee correos cuando el
-  usuario se lo pide por voz, para resumirlos. No envía, no responde, no borra
-  y no modifica correos.
+- **Gmail (`gmail.readonly` y `gmail.send`).** Busca y lee correos cuando el
+  usuario se lo pide por voz, para resumirlos. Envía un correo nuevo solo
+  cuando el usuario lo dicta y después confirma con un «sí» explícito. No
+  borra, no archiva y no modifica correos.
 - **Google Calendar.** Consulta, crea y borra eventos en los calendarios que el
   usuario compartió con la cuenta de servicio del proyecto. Para borrar pide
   confirmación.
@@ -22,7 +23,8 @@ autor, el Dr. Abraham Valles. No es un servicio público ni tiene otros usuarios
   Firestore y se borra sola a los 7 días. Si una respuesta resumió un correo,
   ese resumen se borra con ella.
 - El texto completo de los correos no se guarda en ninguna base de datos: solo
-  se lee en el momento de la consulta.
+  se lee en el momento de la consulta. Un borrador por enviar se guarda 10
+  minutos mientras el usuario lo confirma y después se borra.
 
 ## Qué no hace
 
@@ -35,6 +37,6 @@ autor, el Dr. Abraham Valles. No es un servicio público ni tiene otros usuarios
 
 En myaccount.google.com → Seguridad → «Apps de terceros con acceso a tu
 cuenta» → JARVIS → «Quitar acceso». Después de eso, JARVIS ya no puede leer
-el correo.
+ni enviar correos.
 
 Contacto: abrahamvalles620@gmail.com

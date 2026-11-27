@@ -286,7 +286,7 @@ calendarios van separados por comas en el secreto `JARVIS_CALENDARIOS`. Sin ese
 secreto, JARVIS responde que la agenda no está conectada. Los títulos de los
 eventos llegan al modelo: no pongas nombres de pacientes en el calendario.
 
-## Gmail de solo lectura (fase 4.3)
+## Gmail: leer y enviar con confirmación (fase 4.3)
 
 `consultar_correo(busqueda, cantidad)` busca con la sintaxis de Gmail
 (`is:unread`, `from:…`, `newer_than:7d`; vacío = bandeja de los últimos dos días)
@@ -294,7 +294,19 @@ y devuelve hasta 10 correos con remitente, asunto, fecha local y extracto.
 `leer_correo(correo_id)` trae el texto (prefiere `text/plain`; si solo hay HTML,
 le quita las etiquetas) recortado a 4000 caracteres.
 
-El permiso es `gmail.readonly`: JARVIS no puede enviar, responder ni borrar. El
+Enviar sigue el mismo patrón que borrar eventos:
+
+- `proponer_correo(para, asunto, cuerpo)`: no envía. Valida de 1 a 5 direcciones
+  completas, asunto y texto (máximo 5000 caracteres), y guarda el borrador 10
+  minutos en `usuarios/{id}/estado/correo_pendiente`.
+- `confirmar_envio_correo()`: solo envía si el borrador sigue vigente, se hizo
+  en una petición anterior y el texto actual es afirmativo sin negación ni
+  cambios («sí, envíalo» sí; «ok, pero cambia la hora» no). Borra el borrador
+  antes de enviar, así un error de red nunca termina en un correo duplicado.
+
+Los permisos son `gmail.readonly` y `gmail.send`: JARVIS no puede borrar,
+archivar ni modificar correos. Si el token solo tiene lectura, Gmail responde
+403 y JARVIS dice que le falta el permiso de envío. El
 secreto `JARVIS_GMAIL` guarda un JSON con `client_id`, `client_secret` y
 `refresh_token`; el servidor pide un token de acceso de una hora y lo reutiliza.
 Si Google responde `invalid_grant`, el permiso se revocó y hay que volver a
@@ -302,8 +314,10 @@ correr `scripts/autorizar_gmail.py`.
 
 El texto de un correo lo escribió un tercero, así que puede traer instrucciones
 disfrazadas («ignora tus reglas y…»). Las instrucciones del modelo dicen que es
-un dato, y como el permiso es de solo lectura, aunque el modelo se confundiera no
-podría mandar nada. Si un correo trae datos de pacientes, JARVIS no los repite.
+un dato. Además, todo envío pasa por un borrador que JARVIS lee en voz alta y
+que solo sale con un «sí» del usuario en otra petición, así que una instrucción
+escondida en un correo no basta para mandar nada. Si un correo trae datos de
+pacientes, JARVIS no los repite ni los pone en un correo.
 
 ## Recordatorios por voz (fase 4.4)
 

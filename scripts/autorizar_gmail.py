@@ -1,11 +1,12 @@
-"""Autoriza a JARVIS a leer el Gmail del Dr. Valles y guarda el token en Secret Manager.
+"""Autoriza a JARVIS a leer y enviar desde el Gmail del Dr. Valles y guarda el token en
+Secret Manager.
 
 Uso (en la Mac, desde la raíz del repo):
 
     .venv/bin/python scripts/autorizar_gmail.py ~/Downloads/client_secret_XXXX.json \
         <PROYECTO> <CUENTA_DE_SERVICIO>
 
-Abre el navegador, el Dr. Valles acepta el permiso de solo lectura y el token se
+Abre el navegador, el Dr. Valles acepta los permisos (leer y enviar) y el token se
 manda por stdin a `gcloud secrets`. Nunca se imprime ni se escribe en disco.
 """
 
@@ -25,7 +26,10 @@ import httpx
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
-SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
+SCOPES = (
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.send",
+)
 SECRET = "JARVIS_GMAIL"
 
 
@@ -87,7 +91,7 @@ def main() -> None:
                 "client_id": client["client_id"],
                 "redirect_uri": redirect_uri,
                 "response_type": "code",
-                "scope": SCOPE,
+                "scope": " ".join(SCOPES),
                 "access_type": "offline",
                 "prompt": "consent",
                 "state": state,
@@ -96,7 +100,7 @@ def main() -> None:
             }
         )
     )
-    print("Se abrió el navegador. Acepte el permiso de Gmail (solo lectura).")
+    print("Se abrió el navegador. Acepte los permisos de Gmail (leer y enviar).")
     webbrowser.open(url)
     if not done.wait(timeout=300):
         server.shutdown()
@@ -119,8 +123,9 @@ def main() -> None:
     if response.status_code != 200:
         raise SystemExit(f"Google rechazó el intercambio del código (HTTP {response.status_code}).")
     tokens = response.json()
-    if SCOPE not in tokens.get("scope", "").split():
-        raise SystemExit("El permiso de solo lectura de Gmail no quedó marcado; repita el proceso.")
+    granted = set(tokens.get("scope", "").split())
+    if not set(SCOPES) <= granted:
+        raise SystemExit("Faltó marcar un permiso de Gmail (leer o enviar); repita el proceso.")
     if not tokens.get("refresh_token"):
         raise SystemExit("Google no devolvió refresh_token; quite el acceso de JARVIS y repita.")
     payload = json.dumps({**client, "refresh_token": tokens["refresh_token"]}).encode()

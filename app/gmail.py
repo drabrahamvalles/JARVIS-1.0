@@ -1,7 +1,7 @@
-"""Cliente de solo lectura para el Gmail del Dr. Valles.
+"""Cliente para leer el Gmail del Dr. Valles y enviar correos que él confirmó.
 
 Gmail no acepta la cuenta de servicio de Cloud Run en una cuenta personal, así que
-aquí se usa un token OAuth propio (alcance gmail.readonly). El token vive en el
+aquí se usa un token OAuth propio (gmail.readonly y gmail.send). El token vive en el
 secreto JARVIS_GMAIL como JSON con client_id, client_secret y refresh_token; lo
 genera scripts/autorizar_gmail.py y nunca pasa por el repositorio ni por el chat.
 """
@@ -17,6 +17,7 @@ import threading
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from email.message import EmailMessage
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -27,6 +28,7 @@ logger = logging.getLogger(__name__)
 API = "https://gmail.googleapis.com/gmail/v1/users/me"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
+SCOPE_SEND = "https://www.googleapis.com/auth/gmail.send"
 MAX_CORREOS = 10
 MAX_CUERPO = 4000
 _MESSAGE_ID = re.compile(r"[a-zA-Z0-9]{1,64}")
@@ -41,6 +43,10 @@ class GmailNoConfigurado(Exception):
 
 class GmailError(Exception):
     """Gmail no respondió como se esperaba."""
+
+
+class GmailSinPermisoDeEnvio(GmailError):
+    """El token se autorizó solo para leer; hay que volver a autorizar con gmail.send."""
 
 
 @dataclass(frozen=True)
@@ -181,6 +187,25 @@ class Gmail:
         if response.status_code >= 400:
             raise GmailError(f"HTTP {response.status_code}")
         return response.json()
+
+    async def send(self, to: list[str], subject: str, body: str) -> str:
+        message = EmailMessage()
+        message["To"] = ", ".join(to)
+        message["Subject"] = subject
+        message.set_content(body)
+        raw = base64.urlsafe_b64encode(message.as_bytes()).decode().rstrip("=")
+        token = await self._access_token()
+        async with self._client() as client:
+            response = await client.post(
+                f"{API}/messages/send",
+                json={"raw": raw},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        if response.status_code == 403:
+            raise GmailSinPermisoDeEnvio
+        if response.status_code >= 400:
+            raise GmailError(f"HTTP {response.status_code}")
+        return str(response.json().get("id", ""))
 
     async def search(self, query: str, zone_name: str, limit: int) -> list[dict[str, Any]]:
         zone = ZoneInfo(zone_name)

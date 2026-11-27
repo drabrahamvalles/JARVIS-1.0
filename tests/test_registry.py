@@ -15,6 +15,7 @@ def test_builtin_discovery_and_strict_schema():
     by_name = {schema["name"]: schema for schema in schemas}
     assert set(by_name) == {
         "confirmar_borrado_evento",
+        "confirmar_envio_correo",
         "consultar_correo",
         "consultar_agenda",
         "consultar_zona_horaria",
@@ -24,6 +25,7 @@ def test_builtin_discovery_and_strict_schema():
         "fijar_zona_horaria",
         "obtener_clima",
         "obtener_hora_actual",
+        "proponer_correo",
         "proponer_borrado_evento",
         "volver_a_automatico",
     }

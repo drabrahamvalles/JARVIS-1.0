@@ -237,3 +237,10 @@ def test_pending_delete_roundtrip_and_isolation(backend, tmp_path):
     assert store.read_pending_delete() == {"usuario_id": "principal", **several}
     store.write_pending_delete(None)
     assert store.read_pending_delete() is None
+    assert store.read_pending_email() is None
+    email = {"para": ["a@b.com"], "asunto": "Hola", "cuerpo": "Texto", "solicitud_id": "s3"}
+    store.write_pending_email(email)
+    assert make_store("principal").read_pending_email() == {"usuario_id": "principal", **email}
+    assert other.read_pending_email() is None
+    store.write_pending_email(None)
+    assert store.read_pending_email() is None

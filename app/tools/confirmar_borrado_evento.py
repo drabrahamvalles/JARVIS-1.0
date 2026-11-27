@@ -1,31 +1,14 @@
 import logging
-import re
-import unicodedata
 from datetime import UTC, datetime
 
 from starlette.concurrency import run_in_threadpool
 
 from app.calendario import CalendarioError, CalendarioNoConfigurado, get_calendar
+from app.confirmacion import es_confirmacion
 from app.context import ToolContext
 from app.registry import tool
 
 logger = logging.getLogger(__name__)
-
-AFIRMACION = re.compile(
-    r"\b(si|confirmo|confirmado|borralo|borrala|eliminalo|eliminala|adelante|hazlo|dale|claro"
-    r"|correcto|de acuerdo|ok|okay)\b"
-)
-NEGACION = re.compile(r"\b(no|espera|cancela|cancelalo|mejor no|todavia no|aun no)\b")
-
-
-def _normalize(text: str) -> str:
-    decomposed = unicodedata.normalize("NFKD", text.casefold())
-    return "".join(character for character in decomposed if not unicodedata.combining(character))
-
-
-def es_confirmacion(text: str) -> bool:
-    normalized = _normalize(text)
-    return bool(AFIRMACION.search(normalized)) and not NEGACION.search(normalized)
 
 
 @tool

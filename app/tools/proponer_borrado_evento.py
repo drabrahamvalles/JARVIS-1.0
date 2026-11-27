@@ -1,14 +1,15 @@
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from starlette.concurrency import run_in_threadpool
 
 from app.calendario import CalendarioError, CalendarioNoConfigurado, get_calendar
+from app.confirmacion import VIGENCIA as VIGENCIA_CONFIRMACION
 from app.context import ToolContext, active_timezone
 from app.registry import tool
 
 logger = logging.getLogger(__name__)
-VIGENCIA_CONFIRMACION = timedelta(minutes=10)
+
 MAX_BORRADOS = 10
 
 
