@@ -40,6 +40,7 @@ class FakeGoogle:
         self.items = items_by_calendar
         self.requests = []
         self.deleted = []
+        self.created = []
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
@@ -52,6 +53,13 @@ class FakeGoogle:
             return httpx.Response(404)
         if request.method == "GET" and parts[-1] == "events":
             return httpx.Response(200, json={"items": items})
+        if request.method == "POST" and parts[-1] == "events":
+            assert request.url.params["sendUpdates"] == "none"
+            body = json.loads(request.content)
+            created = {"id": f"nuevo{len(self.requests)}", **body}
+            self.created.append(body)
+            items.append(created)
+            return httpx.Response(200, json=created)
         event = next((item for item in items if item["id"] == parts[-1]), None)
         if event is None:
             return httpx.Response(404)
@@ -271,3 +279,41 @@ async def test_brain_gives_each_request_its_own_id(config):
     assert seen[0][1] == "¿qué tengo mañana?" and seen[1][1] == "sí"
     assert seen[0][0] and seen[1][0] and seen[0][0] != seen[1][0]
     registry.execute = original
+
+
+async def test_create_event_with_time_default_duration_and_all_day(google, tmp_path):
+    from app.tools.crear_evento import crear_evento
+
+    context = context_for(tmp_path, zone="America/Monterrey")
+    future = (datetime.now(UTC) + timedelta(days=3)).date()
+    timed = await crear_evento(
+        "  Cita con el dentista ", f"{future} 17:00", None, "Consultorio", context=context
+    )
+    assert timed["ok"] is True
+    assert timed["evento"]["inicio"] == f"{future} 17:00"
+    assert timed["evento"]["fin"] == f"{future} 18:00"
+    body = google.created[0]
+    assert body["summary"] == "Cita con el dentista"
+    assert body["start"]["timeZone"] == "America/Monterrey"
+    assert body["location"] == "Consultorio"
+
+    all_day = await crear_evento("Congreso", future.isoformat(), None, None, context=context)
+    assert all_day["evento"]["todo_el_dia"] is True
+    assert google.created[1]["end"] == {"date": (future + timedelta(days=1)).isoformat()}
+
+
+async def test_create_event_rejects_bad_input(google, tmp_path):
+    from app.tools.crear_evento import crear_evento
+
+    context = context_for(tmp_path)
+    future = (datetime.now(UTC) + timedelta(days=3)).date()
+    assert (await crear_evento("", f"{future} 10:00", None, None, context=context))["ok"] is False
+    assert (await crear_evento("X", "el martes", None, None, context=context))["ok"] is False
+    assert (await crear_evento("X", "2020-01-01 10:00", None, None, context=context))["ok"] is False
+    assert (await crear_evento("X", f"{future} 10:00", f"{future} 09:00", None, context=context))[
+        "ok"
+    ] is False
+    assert (await crear_evento("X", f"{future} 10:00", str(future), None, context=context))[
+        "ok"
+    ] is False
+    assert google.created == []

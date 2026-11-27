@@ -201,6 +201,35 @@ class GoogleCalendar:
             return None
         return _parse_event(response.json(), index, ZoneInfo(zone_name))
 
+    async def create_event(
+        self,
+        title: str,
+        start: datetime | date,
+        end: datetime | date,
+        zone_name: str,
+        location: str | None = None,
+    ) -> Evento:
+        if isinstance(start, datetime):
+            body: dict[str, Any] = {
+                "start": {"dateTime": start.isoformat(), "timeZone": zone_name},
+                "end": {"dateTime": end.isoformat(), "timeZone": zone_name},
+            }
+        else:
+            body = {"start": {"date": start.isoformat()}, "end": {"date": end.isoformat()}}
+        body["summary"] = title
+        if location:
+            body["location"] = location
+        # Se crea en el primer calendario configurado; sendUpdates=none no invita a nadie.
+        response = await self._request(
+            "POST", self._events_url(0), params={"sendUpdates": "none"}, json=body
+        )
+        if response.status_code >= 300:
+            raise CalendarioError(f"HTTP {response.status_code}")
+        event = _parse_event(response.json(), 0, ZoneInfo(zone_name))
+        if event is None:
+            raise CalendarioError("Respuesta sin evento")
+        return event
+
     async def delete_event(self, event_id: str) -> bool:
         index, raw_id = decode_event_id(event_id)
         if index >= len(self.calendar_ids):

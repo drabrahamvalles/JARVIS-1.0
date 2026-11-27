@@ -277,7 +277,8 @@ class Brain:
             "proponer_borrado_evento y pregunta «¿Lo borro, Dr. Valles?» con título, día y hora. "
             "Nunca llames confirmar_borrado_evento en la misma respuesta en que preguntas; solo "
             "cuando el usuario confirme en su siguiente mensaje. Si hay varios eventos posibles, "
-            "pregunta cuál antes de proponer."
+            "pregunta cuál antes de proponer. Para agendar, llama crear_evento sin pedir "
+            "confirmación y responde «Listo, Dr. Valles. Agendé …» con título, día y hora."
             "\nRecordatorios: si el usuario pide «recuérdame…», llama crear_recordatorio una vez "
             "y responde «Listo, Dr. Valles. Se lo recuerdo …» con el día y la hora."
         )

@@ -21,7 +21,7 @@ en pruebas.
 | 2 | Briefing al apagar la alarma | Validada (26/11/2026) |
 | 2.5 | Captura de pantalla a calendario y recordatorios | Validada (26/11/2026) |
 | 4.1 | Memoria persistente en Firestore | Hecha (26/11/2026) |
-| 4.2 | Calendario: leer y borrar con confirmación | Construida, falta conectar y validar |
+| 4.2 | Calendario: leer, agendar y borrar con confirmación | Lectura y borrado validados (26/11/2026); agendar por voz construido |
 | 4.3 | Gmail de solo lectura | Pendiente |
 | 4.4 | Recordatorios por voz | Servidor listo, falta el Atajo |
 | 5 | WHOOP: recuperación y sueño en el briefing | Pendiente |

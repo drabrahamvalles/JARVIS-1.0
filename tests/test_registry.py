@@ -17,6 +17,7 @@ def test_builtin_discovery_and_strict_schema():
         "confirmar_borrado_evento",
         "consultar_agenda",
         "consultar_zona_horaria",
+        "crear_evento",
         "crear_recordatorio",
         "fijar_zona_horaria",
         "obtener_clima",

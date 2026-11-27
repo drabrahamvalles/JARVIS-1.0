@@ -28,3 +28,15 @@ Después de «Obtener valor del diccionario: respuesta», agrega:
       lista Tareas, alerta a una hora = `recordatorio_alerta`.
    3. De lo contrario: Nuevo recordatorio con el título, sin alerta.
 3. Leer texto sigue leyendo `respuesta` (elige esa variable tocando su acción).
+
+## Conversación continua
+
+Para no volver a presionar el botón después de cada respuesta:
+
+1. Pon todas las acciones dentro de **Repetir 10 veces**.
+2. Justo después de Dictar texto, agrega **Si** Texto dictado **contiene** `gracias`
+   (o `eso es todo`): Leer texto «A sus órdenes, Dr. Valles» y **Detener este atajo**.
+3. Si no dices nada, el dictado termina el atajo solo.
+
+JARVIS recuerda los últimos diez turnos, así que «¿y por qué?» o «sí, bórralo»
+funcionan dentro de la misma conversación.

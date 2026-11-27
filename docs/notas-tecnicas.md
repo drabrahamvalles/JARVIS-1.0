@@ -260,9 +260,12 @@ Responses. Las políticas de retención del proveedor aplican a esas llamadas.
 
 ## Agenda (fase 4.2)
 
-`/ask` puede consultar y borrar eventos de Google Calendar con tres
+`/ask` puede consultar, crear y borrar eventos de Google Calendar con cuatro
 herramientas:
 
+- `crear_evento(titulo, inicio, fin, lugar)`: agenda sin confirmación (es el
+  calendario propio). Sin fin dura una hora; solo con fecha es de todo el día.
+  Se crea en el primer calendario de `JARVIS_CALENDARIOS`.
 - `consultar_agenda(desde, hasta, texto)`: fechas locales `AAAA-MM-DD`, máximo
   31 días. Devuelve hasta 25 eventos ordenados, con la hora convertida a la zona
   activa. Si el mismo evento aparece en dos calendarios compartidos, se muestra
