@@ -30,9 +30,10 @@ def es_confirmacion(text: str) -> bool:
 
 @tool
 async def confirmar_borrado_evento(*, context: ToolContext) -> dict[str, object]:
-    """Borra el evento que propuso proponer_borrado_evento. Llámala solo cuando el
-    usuario, en un mensaje posterior a tu pregunta, confirme explícitamente el borrado
-    (por ejemplo «sí, bórralo»). Si duda, cambia de tema o dice que no, no la llames.
+    """Borra todos los eventos que propuso proponer_borrado_evento. Llámala una sola vez
+    y solo cuando el usuario, en un mensaje posterior a tu pregunta, confirme
+    explícitamente el borrado (por ejemplo «sí, bórralos»). Si duda, cambia de tema o
+    dice que no, no la llames.
     """
     if context.store is None:
         return {"ok": False, "mensaje": "No puedo leer la confirmación en este momento."}
@@ -58,14 +59,30 @@ async def confirmar_borrado_evento(*, context: ToolContext) -> dict[str, object]
             "ok": False,
             "mensaje": "Falta la confirmación explícita del usuario; pregúntale primero.",
         }
-    try:
-        deleted = await get_calendar().delete_event(pending["evento_id"])
-    except (CalendarioNoConfigurado, CalendarioError, ValueError):
-        return {"ok": False, "mensaje": "Google Calendar no respondió; no borré nada."}
+    # Propuestas guardadas antes de admitir varios eventos traían un solo evento_id.
+    events = pending.get("eventos") or [
+        {
+            "evento_id": pending.get("evento_id"),
+            "titulo": pending.get("titulo"),
+            "inicio": pending.get("inicio"),
+        }
+    ]
+    deleted, missing = [], []
+    for event in events:
+        try:
+            ok = await get_calendar().delete_event(event["evento_id"])
+        except (CalendarioNoConfigurado, CalendarioError, ValueError, TypeError):
+            break
+        (deleted if ok else missing).append(
+            {"titulo": event.get("titulo"), "inicio": event.get("inicio")}
+        )
     await run_in_threadpool(context.store.write_pending_delete, None)
-    if not deleted:
-        return {"ok": False, "mensaje": "El evento ya no existía."}
-    return {
-        "ok": True,
-        "borrado": {"titulo": pending.get("titulo"), "inicio": pending.get("inicio")},
-    }
+    if not deleted and not missing:
+        return {"ok": False, "mensaje": "Google Calendar no respondió; no borré nada."}
+    result: dict[str, object] = {"ok": bool(deleted), "borrados": deleted}
+    if missing:
+        result["ya_no_existian"] = missing
+    pendientes = len(events) - len(deleted) - len(missing)
+    if pendientes:
+        result["mensaje"] = f"Google Calendar dejó de responder; faltaron {pendientes}."
+    return result

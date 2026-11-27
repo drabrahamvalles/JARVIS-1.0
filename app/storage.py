@@ -168,7 +168,9 @@ class FirestoreStore:
     def read_pending_delete(self) -> dict | None:
         reference = self._user.collection("estado").document("borrado_pendiente")
         data = reference.get(retry=RPC_RETRY, timeout=RPC_TIMEOUT).to_dict()
-        if not data or data.get("usuario_id") != self.user_id or not data.get("evento_id"):
+        if not data or data.get("usuario_id") != self.user_id:
+            return None
+        if not (data.get("eventos") or data.get("evento_id")):
             return None
         return data
 

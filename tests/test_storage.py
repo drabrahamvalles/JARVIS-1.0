@@ -232,5 +232,8 @@ def test_pending_delete_roundtrip_and_isolation(backend, tmp_path):
     store.write_pending_delete(pending)
     assert make_store("principal").read_pending_delete() == {"usuario_id": "principal", **pending}
     assert other.read_pending_delete() is None
+    several = {"eventos": [{"evento_id": "0:a"}, {"evento_id": "0:b"}], "solicitud_id": "s2"}
+    store.write_pending_delete(several)
+    assert store.read_pending_delete() == {"usuario_id": "principal", **several}
     store.write_pending_delete(None)
     assert store.read_pending_delete() is None

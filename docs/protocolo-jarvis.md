@@ -21,7 +21,7 @@ en pruebas.
 | 2 | Briefing al apagar la alarma | Validada (26/11/2026) |
 | 2.5 | Captura de pantalla a calendario y recordatorios | Validada (26/11/2026) |
 | 4.1 | Memoria persistente en Firestore | Hecha (26/11/2026) |
-| 4.2 | Calendario: leer, agendar y borrar con confirmación | Lectura y borrado validados (26/11/2026); agendar por voz construido |
+| 4.2 | Calendario: leer, agendar y borrar con confirmación | Lectura, borrado y agendar por voz validados (26/11/2026); borrado de varios eventos en prueba |
 | 4.3 | Gmail de solo lectura | Pendiente |
 | 4.4 | Recordatorios por voz | Servidor listo, falta el Atajo |
 | 5 | WHOOP: recuperación y sueño en el briefing | Pendiente |
@@ -54,8 +54,8 @@ que las rutas.
   Run en lugar de usar OAuth personal. No hay tokens que renovar y JARVIS
   solo ve lo que yo comparto. Los correos de los calendarios viven en el
   secreto JARVIS_CALENDARIOS, no en el repositorio.
-- Borrar un evento exige dos pasos: JARVIS propone, yo confirmo en el
-  siguiente mensaje. El servidor rechaza la confirmación si llega en la
+- Borrar exige dos pasos: JARVIS propone uno o varios eventos y yo confirmo
+  todos juntos en el siguiente mensaje. El servidor rechaza la confirmación si llega en la
   misma petición o si mi respuesta no es afirmativa. Nunca avisa a invitados.
 - Gmail no puede usar la cuenta de servicio (solo funciona en Google
   Workspace), así que la 4.3 necesitará permiso OAuth de solo lectura.

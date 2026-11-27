@@ -180,7 +180,7 @@ async def test_agenda_without_configuration_says_so(tmp_path, monkeypatch):
 
 async def test_delete_requires_a_new_request_with_explicit_confirmation(google, tmp_path):
     first = context_for(tmp_path, request_id="pregunta", text="borra el vuelo del domingo")
-    proposal = await proponer_borrado_evento("0:vuelo123", context=first)
+    proposal = await proponer_borrado_evento(["0:vuelo123"], context=first)
     assert proposal["requiere_confirmacion"] is True
     assert google.deleted == []
 
@@ -197,7 +197,9 @@ async def test_delete_requires_a_new_request_with_explicit_confirmation(google, 
     result = await confirmar_borrado_evento(context=yes)
     assert result == {
         "ok": True,
-        "borrado": {"titulo": "Vuelo MZT → MTY (VB 1151 / VB 1126)", "inicio": "2026-10-25 12:13"},
+        "borrados": [
+            {"titulo": "Vuelo MZT → MTY (VB 1151 / VB 1126)", "inicio": "2026-10-25 12:13"}
+        ],
     }
     assert google.deleted == ["vuelo123"]
     # La propuesta se consume: un segundo «sí» no borra otra cosa.
@@ -207,9 +209,55 @@ async def test_delete_requires_a_new_request_with_explicit_confirmation(google, 
     assert again["ok"] is False
 
 
+async def test_several_events_are_deleted_with_one_confirmation(google, tmp_path):
+    ask = context_for(tmp_path, request_id="pregunta", text="borra todo lo de esos días")
+    proposal = await proponer_borrado_evento(
+        ["0:vuelo123", "0:congreso9", "0:vuelo123"], context=ask
+    )
+    assert proposal["ok"] is True
+    assert [event["titulo"] for event in proposal["eventos"]] == [
+        "Vuelo MZT → MTY (VB 1151 / VB 1126)",
+        "Congreso de Psiquiatría",
+    ]
+    assert google.deleted == []
+    result = await confirmar_borrado_evento(
+        context=context_for(tmp_path, request_id="respuesta", text="sí, bórralos")
+    )
+    assert result["ok"] is True
+    assert [event["titulo"] for event in result["borrados"]] == [
+        "Vuelo MZT → MTY (VB 1151 / VB 1126)",
+        "Congreso de Psiquiatría",
+    ]
+    assert google.deleted == ["vuelo123", "congreso9"]
+    assert ask.store.read_pending_delete() is None
+
+
+async def test_too_many_events_in_one_proposal(google, tmp_path):
+    ids = [f"0:evento{number}" for number in range(11)]
+    result = await proponer_borrado_evento(ids, context=context_for(tmp_path))
+    assert result["ok"] is False and google.requests == []
+
+
+async def test_legacy_single_event_proposal_still_confirms(google, tmp_path):
+    store = context_for(tmp_path).store
+    store.write_pending_delete(
+        {
+            "evento_id": "0:congreso9",
+            "titulo": "Congreso de Psiquiatría",
+            "inicio": "2026-11-05",
+            "solicitud_id": "vieja",
+            "expira_en": (datetime.now(UTC) + timedelta(minutes=5)).isoformat(),
+        }
+    )
+    result = await confirmar_borrado_evento(
+        context=context_for(tmp_path, request_id="nueva", text="sí")
+    )
+    assert result["ok"] is True and google.deleted == ["congreso9"]
+
+
 async def test_expired_proposal_is_not_executed(google, tmp_path):
     context = context_for(tmp_path, request_id="pregunta")
-    await proponer_borrado_evento("0:congreso9", context=context)
+    await proponer_borrado_evento(["0:congreso9"], context=context)
     store = context.store
     pending = store.read_pending_delete()
     pending["expira_en"] = (datetime.now(UTC) - timedelta(seconds=1)).isoformat()
@@ -224,9 +272,13 @@ async def test_expired_proposal_is_not_executed(google, tmp_path):
 
 async def test_proposal_for_missing_or_invalid_event(google, tmp_path):
     context = context_for(tmp_path)
-    assert (await proponer_borrado_evento("0:noexiste", context=context))["ok"] is False
-    assert (await proponer_borrado_evento("basura", context=context))["ok"] is False
-    assert (await proponer_borrado_evento("7:vuelo123", context=context))["ok"] is False
+    assert (await proponer_borrado_evento(["0:noexiste"], context=context))["ok"] is False
+    assert (await proponer_borrado_evento(["basura"], context=context))["ok"] is False
+    assert (await proponer_borrado_evento(["7:vuelo123"], context=context))["ok"] is False
+    assert (await proponer_borrado_evento([], context=context))["ok"] is False
+    # Si uno de varios no existe, no se guarda ninguna propuesta parcial.
+    mixed = await proponer_borrado_evento(["0:vuelo123", "0:noexiste"], context=context)
+    assert mixed["ok"] is False
     assert context.store.read_pending_delete() is None
 
 

@@ -270,10 +270,12 @@ herramientas:
   31 días. Devuelve hasta 25 eventos ordenados, con la hora convertida a la zona
   activa. Si el mismo evento aparece en dos calendarios compartidos, se muestra
   una vez.
-- `proponer_borrado_evento(evento_id)`: no borra. Guarda la propuesta en
-  Firestore (`usuarios/{id}/estado/borrado_pendiente`) durante 10 minutos y le
-  pide al modelo que pregunte.
-- `confirmar_borrado_evento()`: solo borra si la propuesta sigue vigente, se hizo
+- `proponer_borrado_evento(evento_ids)`: no borra. Recibe de 1 a 10 eventos,
+  guarda la propuesta en Firestore (`usuarios/{id}/estado/borrado_pendiente`)
+  durante 10 minutos y le pide al modelo que pregunte una sola vez. Si uno de
+  los eventos no existe, no guarda nada.
+- `confirmar_borrado_evento()`: borra todos los eventos propuestos con un solo
+  «sí». Solo borra si la propuesta sigue vigente, se hizo
   en una petición anterior y el texto actual del usuario es afirmativo («sí»,
   «bórralo», «adelante») sin negación. Borra con `sendUpdates=none` para que
   Google no escriba a los invitados.
