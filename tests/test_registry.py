@@ -17,6 +17,7 @@ def test_builtin_discovery_and_strict_schema():
         "confirmar_borrado_evento",
         "confirmar_envio_correo",
         "consultar_correo",
+        "consultar_whoop",
         "consultar_agenda",
         "consultar_zona_horaria",
         "crear_evento",

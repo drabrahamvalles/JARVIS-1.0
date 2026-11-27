@@ -319,6 +319,34 @@ que solo sale con un «sí» del usuario en otra petición, así que una instruc
 escondida en un correo no basta para mandar nada. Si un correo trae datos de
 pacientes, JARVIS no los repite ni los pone en un correo.
 
+## WHOOP (fase 5)
+
+`app/whoop.py` lee la API v2 de WHOOP (recuperación, sueño y ciclos) con un token
+OAuth propio. `build_summary` decide el estado y el texto con los números
+exactos; el modelo no los calcula:
+
+- `listo`: la última noche (no siesta) terminó hoy en la zona activa y su
+  recuperación ya está calculada (`SCORED`) o es `UNSCORABLE`.
+- `calculando`: la noche todavía no se cierra o la recuperación está en
+  `PENDING_SCORE`. WHOOP solo cierra la noche cuando detecta que el usuario
+  despertó, así que no se puede consultar antes de la alarma.
+- `sin_datos`: no hay sueños recientes.
+
+Colores: verde 67-100, amarilla 34-66, roja 0-33 (las bandas de WHOOP). El
+tiempo dormido suma sueño ligero, profundo y REM. El esfuerzo es el del ciclo
+anterior, porque el de hoy apenas empieza.
+
+`/briefing` consulta WHOOP en paralelo con el modelo y agrega el texto al
+final. Si WHOOP está calculando, la respuesta trae `whoop_pendiente: true` y el
+Atajo llama `POST /whoop` cada 30 segundos (máximo 5 minutos) hasta que
+`listo` sea verdadero. La herramienta `consultar_whoop` responde «¿cómo dormí?».
+
+WHOOP rota el refresh token en cada uso: el anterior deja de servir. El nuevo se
+guarda en Firestore (`usuarios/{id}/estado/whoop_token`) junto con una huella
+del token del secreto; si el secreto cambia porque se volvió a autorizar, se usa
+el del secreto. Solo hay una instancia de Cloud Run y un candado en memoria, así
+que no hay dos refrescos al mismo tiempo.
+
 ## Recordatorios por voz (fase 4.4)
 
 Cuando el usuario dice «recuérdame…», el modelo llama `crear_recordatorio(titulo,

@@ -92,6 +92,26 @@ class BriefingRequest(BaseModel):
 
 class BriefingResponse(BaseModel):
     respuesta: str
+    # True cuando WHOOP sigue calculando la noche: el Atajo vuelve a preguntar en /whoop.
+    whoop_pendiente: bool | None = None
+
+
+class WhoopRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    lat: Annotated[float, Field(ge=-90, le=90, allow_inf_nan=False, strict=True)] | None = None
+    lon: Annotated[float, Field(ge=-180, le=180, allow_inf_nan=False, strict=True)] | None = None
+
+    @model_validator(mode="after")
+    def paired_coordinates(self) -> Self:
+        if (self.lat is None) != (self.lon is None):
+            raise ValueError("Envía lat y lon juntas, o ninguna")
+        return self
+
+
+class WhoopResponse(BaseModel):
+    listo: bool
+    respuesta: str
 
 
 class CapturaRequest(BaseModel):

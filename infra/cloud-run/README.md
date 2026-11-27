@@ -88,3 +88,15 @@ cliente OAuth propio con los alcances `gmail.readonly` y `gmail.send`.
 7. Despliega con `./infra/deploy.sh`: el script agrega `JARVIS_GMAIL` si existe.
 
 Para revocar el acceso: myaccount.google.com → Seguridad → «Apps de terceros con acceso a tu cuenta» → JARVIS → Quitar acceso.
+
+## WHOOP (fase 5)
+
+1. En developer-dashboard.whoop.com crea un equipo y una app con la Redirect URI `http://localhost:8765/whoop` y todos los permisos `read:*`.
+2. Copia el Client Secret con el ícono del ojo (queda en el portapapeles; no lo pegues en ningún chat) y corre:
+
+   ```sh
+   .venv/bin/python scripts/autorizar_whoop.py '<CLIENT_ID>' '<PROYECTO>' '<CUENTA_DE_SERVICIO>'
+   ```
+
+   El script lee el secreto del portapapeles, lo borra de ahí, abre el navegador para aceptar el permiso y guarda `JARVIS_WHOOP` en Secret Manager.
+3. Despliega con `./infra/deploy.sh`: el script agrega `JARVIS_WHOOP` si existe.

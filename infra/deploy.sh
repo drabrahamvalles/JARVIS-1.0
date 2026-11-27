@@ -16,6 +16,10 @@ secrets="OPENAI_API_KEY=OPENAI_API_KEY:latest,JARVIS_TOKEN=JARVIS_TOKEN:latest"
 if gcloud secrets describe JARVIS_CALENDARIOS --project="$project" >/dev/null 2>&1; then
     secrets="$secrets,JARVIS_CALENDARIOS=JARVIS_CALENDARIOS:latest"
 fi
+# WHOOP (fase 5) es opcional.
+if gcloud secrets describe JARVIS_WHOOP --project="$project" >/dev/null 2>&1; then
+    secrets="$secrets,JARVIS_WHOOP=JARVIS_WHOOP:latest"
+fi
 # El token de Gmail (leer y enviar con confirmación) es opcional (fase 4.3).
 if gcloud secrets describe JARVIS_GMAIL --project="$project" >/dev/null 2>&1; then
     secrets="$secrets,JARVIS_GMAIL=JARVIS_GMAIL:latest"

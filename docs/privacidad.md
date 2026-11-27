@@ -12,6 +12,10 @@ autor, el Dr. Abraham Valles. No es un servicio público ni tiene otros usuarios
 - **Google Calendar.** Consulta, crea y borra eventos en los calendarios que el
   usuario compartió con la cuenta de servicio del proyecto. Para borrar pide
   confirmación.
+- **WHOOP (solo lectura).** Lee la recuperación, el sueño, los ciclos y el
+  esfuerzo para el briefing de la mañana y para preguntas como «¿cómo dormí?».
+  No escribe nada en WHOOP. El token de acceso se guarda en Firestore porque
+  WHOOP lo renueva en cada uso.
 - **Ubicación aproximada** del iPhone, para la zona horaria y el clima.
 
 ## Dónde se procesan
@@ -37,6 +41,7 @@ autor, el Dr. Abraham Valles. No es un servicio público ni tiene otros usuarios
 
 En myaccount.google.com → Seguridad → «Apps de terceros con acceso a tu
 cuenta» → JARVIS → «Quitar acceso». Después de eso, JARVIS ya no puede leer
-ni enviar correos.
+ni enviar correos. Para WHOOP: app de WHOOP → Configuración → apps conectadas
+→ JARVIS → desconectar.
 
 Contacto: abrahamvalles620@gmail.com

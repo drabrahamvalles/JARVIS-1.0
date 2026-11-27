@@ -244,3 +244,11 @@ def test_pending_delete_roundtrip_and_isolation(backend, tmp_path):
     assert other.read_pending_email() is None
     store.write_pending_email(None)
     assert store.read_pending_email() is None
+    assert store.read_whoop_token() is None
+    store.write_whoop_token({"refresh_token": "r1", "origen": "o"})
+    assert make_store("principal").read_whoop_token() == {
+        "usuario_id": "principal",
+        "refresh_token": "r1",
+        "origen": "o",
+    }
+    assert other.read_whoop_token() is None

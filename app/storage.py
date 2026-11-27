@@ -32,6 +32,8 @@ class Store(Protocol):
     def write_pending_delete(self, pending: dict | None) -> None: ...
     def read_pending_email(self) -> dict | None: ...
     def write_pending_email(self, pending: dict | None) -> None: ...
+    def read_whoop_token(self) -> dict | None: ...
+    def write_whoop_token(self, token: dict) -> None: ...
 
 
 def _unexpired(turns: list[dict], user_id: str, now: datetime) -> list[dict]:
@@ -57,6 +59,7 @@ class LocalStore:
         self.state_path = state_path if user_id == DEFAULT_USER else user_path / "estado.json"
         self.pending_path = user_path / "borrado_pendiente.json"
         self.email_path = user_path / "correo_pendiente.json"
+        self.whoop_path = user_path / "whoop_token.json"
 
     def _read_turns(self, now: datetime) -> list[dict]:
         try:
@@ -114,6 +117,16 @@ class LocalStore:
     def write_pending_email(self, pending: dict | None) -> None:
         data = None if pending is None else {"usuario_id": self.user_id, **pending}
         timezone_state.write_json_atomically(self.email_path, data)
+
+    def read_whoop_token(self) -> dict | None:
+        try:
+            data = json.loads(self.whoop_path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return None
+        return data if isinstance(data, dict) and data.get("usuario_id") == self.user_id else None
+
+    def write_whoop_token(self, token: dict) -> None:
+        timezone_state.write_json_atomically(self.whoop_path, {"usuario_id": self.user_id, **token})
 
 
 def _stage_firestore_turn(transaction, counter, turns, turn):
@@ -205,6 +218,17 @@ class FirestoreStore:
         reference = self._user.collection("estado").document("correo_pendiente")
         data = {"usuario_id": self.user_id, **(pending or {"para": None})}
         reference.set(data, retry=RPC_RETRY, timeout=RPC_TIMEOUT)
+
+    def read_whoop_token(self) -> dict | None:
+        reference = self._user.collection("estado").document("whoop_token")
+        data = reference.get(retry=RPC_RETRY, timeout=RPC_TIMEOUT).to_dict()
+        if not data or data.get("usuario_id") != self.user_id or not data.get("refresh_token"):
+            return None
+        return data
+
+    def write_whoop_token(self, token: dict) -> None:
+        reference = self._user.collection("estado").document("whoop_token")
+        reference.set({"usuario_id": self.user_id, **token}, retry=RPC_RETRY, timeout=RPC_TIMEOUT)
 
 
 def build_store(env: dict[str, str]) -> Store:

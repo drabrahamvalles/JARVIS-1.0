@@ -11,7 +11,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.brain import Brain, BrainError
 from app.briefing import Briefing, BriefingError
-from app.context import TimezoneResolver
+from app.context import TimezoneResolver, active_timezone
 from app.registry import ToolRegistry
 from app.schemas import (
     AskRequest,
@@ -20,6 +20,8 @@ from app.schemas import (
     BriefingResponse,
     CapturaRequest,
     CapturaResponse,
+    WhoopRequest,
+    WhoopResponse,
 )
 from app.settings import ROOT, AppConfig, Secrets, load_config, load_secrets, runtime_environment
 from app.storage import Store, build_store
@@ -29,9 +31,25 @@ from app.tools.captura import (
     ImagenDemasiadoGrandeError,
     ImagenInvalidaError,
 )
+from app.whoop import WhoopError, WhoopNoConfigurado, get_whoop
 
 logger = logging.getLogger(__name__)
 bearer = HTTPBearer(auto_error=False)
+WHOOP_PENDIENTE = (
+    "WHOOP todavía está calculando su noche; en cuanto termine le doy su recuperación."
+)
+
+
+async def whoop_summary(context) -> dict | None:
+    """Resumen de WHOOP, o None si no está conectado o no respondió."""
+    zone, _ = active_timezone(context)
+    try:
+        return await get_whoop().summary(zone, context.store)
+    except WhoopNoConfigurado:
+        return None
+    except (WhoopError, TimeoutError, ValueError) as exc:
+        logger.warning("whoop_failed kind=%s", type(exc).__name__)
+        return None
 
 
 def create_app(
@@ -77,8 +95,8 @@ def create_app(
             await run_in_threadpool(resolver.close)
 
     application = FastAPI(
-        title="JARVIS · Fase 4",
-        version="0.4.2",
+        title="JARVIS · Fase 5",
+        version="0.5.0",
         lifespan=lifespan,
         docs_url="/docs" if expose_docs else None,
         redoc_url="/redoc" if expose_docs else None,
@@ -134,7 +152,10 @@ def create_app(
             raise HTTPException(502, "No fue posible obtener una respuesta de OpenAI") from None
 
     @application.post(
-        "/briefing", response_model=BriefingResponse, dependencies=[Depends(require_token)]
+        "/briefing",
+        response_model=BriefingResponse,
+        response_model_exclude_none=True,
+        dependencies=[Depends(require_token)],
     )
     async def briefing(payload: BriefingRequest, request: Request) -> BriefingResponse:
         service = request.app.state.briefing
@@ -145,8 +166,17 @@ def create_app(
                 context = await run_in_threadpool(
                     request.app.state.resolver.resolve, payload, request.app.state.config
                 )
-                answer = await service.create(payload, context)
-            return BriefingResponse(respuesta=answer)
+                answer, whoop = await asyncio.gather(
+                    service.create(payload, context), whoop_summary(context)
+                )
+            # El texto de WHOOP lo arma el servidor con los números exactos.
+            if whoop is None or whoop["estado"] == "sin_datos":
+                return BriefingResponse(respuesta=answer)
+            if whoop["estado"] == "calculando":
+                return BriefingResponse(
+                    respuesta=f"{answer} {WHOOP_PENDIENTE}", whoop_pendiente=True
+                )
+            return BriefingResponse(respuesta=f"{answer} {whoop['texto']}", whoop_pendiente=False)
         except (APITimeoutError, TimeoutError):
             raise HTTPException(504, "OpenAI tardó demasiado en responder") from None
         except RateLimitError:
@@ -181,6 +211,23 @@ def create_app(
         except (APIStatusError, APIConnectionError, CapturaError) as exc:
             logger.warning("captura_failed kind=%s", type(exc).__name__)
             raise HTTPException(502, "No fue posible analizar la captura") from None
+
+    @application.post("/whoop", response_model=WhoopResponse, dependencies=[Depends(require_token)])
+    async def whoop(payload: WhoopRequest, request: Request) -> WhoopResponse:
+        """El Atajo del briefing lo llama cada 30 s mientras WHOOP calcula la noche."""
+        context = await run_in_threadpool(
+            request.app.state.resolver.resolve, payload, request.app.state.config
+        )
+        try:
+            async with asyncio.timeout(20):
+                summary = await whoop_summary(context)
+        except TimeoutError:
+            summary = None
+        if summary is None:
+            return WhoopResponse(listo=False, respuesta="No pude consultar WHOOP.")
+        if summary["estado"] == "calculando":
+            return WhoopResponse(listo=False, respuesta=summary["texto"])
+        return WhoopResponse(listo=True, respuesta=summary["texto"])
 
     return application
 

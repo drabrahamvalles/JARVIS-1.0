@@ -22,9 +22,9 @@ en pruebas.
 | 2.5 | Captura de pantalla a calendario y recordatorios | Validada (26/11/2026) |
 | 4.1 | Memoria persistente en Firestore | Hecha (26/11/2026) |
 | 4.2 | Calendario: leer, agendar y borrar con confirmación | Validada (27/11/2026): leer, agendar y borrar varios con un «sí» |
-| 4.3 | Gmail: leer y enviar con confirmación | Lectura conectada (27/11/2026); envío construido, falta reautorizar |
+| 4.3 | Gmail: leer y enviar con confirmación | Validada (27/11/2026) |
 | 4.4 | Recordatorios por voz | Servidor listo, falta el Atajo |
-| 5 | WHOOP: recuperación y sueño en el briefing | Pendiente |
+| 5 | WHOOP: recuperación y sueño en el briefing | Servidor construido; falta autorizar y el Atajo |
 | 3 | Rutas y tráfico al subir al carro | Pendiente |
 | 6 | Voz propia, panel web, conversación con interrupción, "Hey Jarvis" en la Mac | Pendiente |
 | 7 | FRIDAY: agente en la Mac que ejecuta tareas | Pendiente |
