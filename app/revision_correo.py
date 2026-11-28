@@ -8,6 +8,7 @@ agregado se le cuenta al Dr. Valles en el siguiente briefing.
 
 import json
 import logging
+import re
 import time
 import unicodedata
 from datetime import date, datetime, timedelta
@@ -24,7 +25,6 @@ from app.context import ToolContext, active_timezone
 from app.gmail import get_gmail
 from app.settings import AppConfig
 
-logger = logging.getLogger(__name__)
 usage_logger = logging.getLogger("jarvis.usage")
 
 MAX_CORREOS = 15
@@ -36,7 +36,19 @@ HORIZONTE = timedelta(days=180)
 PRIMERA_VENTANA = timedelta(hours=12)
 # Se repasa un poco hacia atrás para no perder correos que llegan justo en el corte.
 TRASLAPE = timedelta(minutes=10)
-BUSQUEDA = "in:inbox -category:promotions -category:social -category:forums after:{epoch}"
+# Solo los importantes según Gmail; sin promociones, redes, foros ni notificaciones
+# (pedidos, envíos, bancos).
+BUSQUEDA = (
+    "in:inbox is:important -category:promotions -category:social -category:updates "
+    "-category:forums after:{epoch}"
+)
+# Un correo que parece clínico nunca se manda al modelo: solo se le avisa al usuario.
+CLINICO = re.compile(
+    r"\b(pacientes?|px|expedientes?|interconsultas?|resultados?|laboratorios?|diagnosticos?"
+    r"|recetas?|nota medica|historia clinica|referencia|contrarreferencia|biometria"
+    r"|quimica sanguinea|tomografia|resonancia|radiografia|ultrasonido|ecografia|biopsia"
+    r"|patologia|consentimiento informado|egreso|ingreso hospitalario)\b"
+)
 
 
 class EventoExtraido(BaseModel):
@@ -64,6 +76,20 @@ def _normalized(value: str) -> str:
             c for c in decomposed if not unicodedata.combining(c) and (c.isalnum() or c == " ")
         ).split()
     )
+
+
+def is_clinical(summary: dict[str, Any]) -> bool:
+    text = " ".join(str(summary.get(key) or "") for key in ("de", "asunto", "extracto"))
+    return CLINICO.search(_normalized(text)) is not None
+
+
+def sender_name(value: str) -> str:
+    """Solo el nombre del remitente (o su dominio), nunca el asunto."""
+    name = value.split("<", 1)[0].strip().strip('"')
+    if name:
+        return name[:60]
+    match = re.search(r"@([\w.-]+)", value)
+    return match.group(1) if match else "un remitente"
 
 
 def validate_event(
@@ -131,8 +157,11 @@ class RevisorCorreo:
         query = BUSQUEDA.format(epoch=int(since_dt.timestamp()))
         found = await gmail.search(query, zone_name, MAX_CORREOS)
         fresh = [item for item in found if item.get("id") and item["id"] not in processed]
+        clinical = [item for item in fresh if is_clinical(item)]
         messages = []
         for item in fresh:
+            if item in clinical:
+                continue
             message = await gmail.read(item["id"], zone_name)
             if message:
                 messages.append(message)
@@ -142,15 +171,23 @@ class RevisorCorreo:
             extraction = await self._extract(messages, now, zone_name)
             added = await self._schedule(extraction, messages, zone, now, zone_name)
 
-        notices = list(state.get("avisos") or []) + added
+        clinical_notices = [
+            {"tipo": "clinico", "de": sender_name(str(item.get("de") or ""))} for item in clinical
+        ]
+        notices = list(state.get("avisos") or []) + added + clinical_notices
         new_state = {
             "desde": now.isoformat(),
             "procesados": (processed + [m["id"] for m in fresh])[-MAX_PROCESADOS:],
             "avisos": notices[-MAX_AVISOS:],
         }
         await run_in_threadpool(store.write_correo_revision, new_state)
-        logger.info("correo_revisado correos=%d agregados=%d", len(messages), len(added))
-        return {"revisados": len(messages), "agregados": added}
+        usage_logger.info(
+            "correo_revisado correos=%d clinicos=%d agregados=%d",
+            len(messages),
+            len(clinical),
+            len(added),
+        )
+        return {"revisados": len(messages), "clinicos": len(clinical), "agregados": added}
 
     async def _extract(
         self, messages: list[dict[str, Any]], now: datetime, zone_name: str
@@ -261,15 +298,24 @@ def _spoken_when(value: str) -> str:
 
 
 def notice_sentence(notices: list[dict[str, str]]) -> str | None:
-    """Oración que el servidor agrega al briefing con lo que se agendó desde el correo."""
-    if not notices:
-        return None
-    parts = [f"{item['titulo']} {_spoken_when(item['inicio'])}" for item in notices[:5]]
-    extra = len(notices) - len(parts)
-    text = "; ".join(parts)
-    if extra > 0:
-        text += f" y {extra} más"
-    return f"De sus correos agregué a su calendario: {text}."
+    """Oraciones que el servidor agrega al briefing: lo agendado y los correos clínicos."""
+    events = [item for item in notices if item.get("tipo") != "clinico"]
+    clinical = [item for item in notices if item.get("tipo") == "clinico"]
+    sentences = []
+    if events:
+        parts = [f"{item['titulo']} {_spoken_when(item['inicio'])}" for item in events[:5]]
+        extra = len(events) - len(parts)
+        text = "; ".join(parts)
+        if extra > 0:
+            text += f" y {extra} más"
+        sentences.append(f"De sus correos agregué a su calendario: {text}.")
+    if clinical:
+        senders = list(dict.fromkeys(item["de"] for item in clinical))[:3]
+        who = " y de ".join(senders) if len(senders) <= 2 else ", de ".join(senders)
+        noun = "un correo clínico" if len(clinical) == 1 else f"{len(clinical)} correos clínicos"
+        verb = "revíselo" if len(clinical) == 1 else "revíselos"
+        sentences.append(f"Tiene {noun} de {who}; {verb} usted.")
+    return " ".join(sentences) or None
 
 
 INSTRUCCIONES = (

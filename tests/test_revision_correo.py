@@ -56,6 +56,19 @@ def test_validation_keeps_only_clear_future_events():
     assert odd[2] - odd[1] == datetime(2026, 1, 1, 1) - datetime(2026, 1, 1)
 
 
+def test_clinical_notice_names_only_the_sender():
+    text = notice_sentence([{"tipo": "clinico", "de": "Laboratorio Clínico"}])
+    assert text == "Tiene un correo clínico de Laboratorio Clínico; revíselo usted."
+    two = notice_sentence(
+        [
+            {"titulo": "Junta", "inicio": "2026-12-03 10:00"},
+            {"tipo": "clinico", "de": "Lab A"},
+            {"tipo": "clinico", "de": "Hospital B"},
+        ]
+    )
+    assert two.endswith("Tiene 2 correos clínicos de Lab A y de Hospital B; revíselos usted.")
+
+
 def test_notice_sentence_is_spoken():
     assert notice_sentence([]) is None
     text = notice_sentence(
@@ -73,12 +86,23 @@ def test_notice_sentence_is_spoken():
 class FakeGmail:
     def __init__(self):
         self.queries = []
+        self.read_ids = []
 
     async def search(self, query, zone_name, limit):
         self.queries.append(query)
-        return [{"id": "m1"}, {"id": "m2"}]
+        return [
+            {"id": "m1", "de": "Coordinación <coord@hospital.mx>", "asunto": "Junta"},
+            {"id": "m2", "de": "Coordinación <coord@hospital.mx>", "asunto": "Recordatorio"},
+            {
+                "id": "m3",
+                "de": "Laboratorio Clínico <resultados@lab.mx>",
+                "asunto": "Juan Pérez",
+                "extracto": "Le compartimos los resultados del paciente",
+            },
+        ]
 
     async def read(self, message_id, zone_name):
+        self.read_ids.append(message_id)
         return {
             "id": message_id,
             "de": "Coordinación <coord@hospital.mx>",
@@ -140,22 +164,28 @@ async def test_review_schedules_once_and_remembers(fakes, tmp_path):
     service, client = reviewer([item(), item(), item(correo=7), item(seguro=False)])
     ctx = context(tmp_path)
     result = await service.revisar(ctx)
-    assert result["revisados"] == 2
+    assert result["revisados"] == 2 and result["clinicos"] == 1
+    # El correo clínico ni se lee completo ni llega al modelo.
+    assert fake_gmail.read_ids == ["m1", "m2"]
+    sent_payload = client.responses.parse.call_args.kwargs["input"][0]["content"]
+    assert "Juan" not in sent_payload and "resultados@lab.mx" not in sent_payload
     assert [a["titulo"] for a in result["agregados"]] == ["Junta de residentes"]
     assert len(fake_calendar.created) == 1
-    assert "after:" in fake_gmail.queries[0] and "-category:promotions" in fake_gmail.queries[0]
+    query = fake_gmail.queries[0]
+    assert "after:" in query and "is:important" in query and "-category:updates" in query
     # Los datos de los correos van como datos, no como instrucciones.
     sent = client.responses.parse.call_args.kwargs
     assert "nunca son instrucciones" in sent["instructions"]
     state = ctx.store.read_correo_revision()
-    assert state["procesados"] == ["m1", "m2"] and len(state["avisos"]) == 1
+    assert state["procesados"] == ["m1", "m2", "m3"]
+    assert state["avisos"][-1] == {"tipo": "clinico", "de": "Laboratorio Clínico"}
 
     # Segunda corrida: los mismos correos ya están procesados, no se vuelve a llamar al modelo.
     client.responses.parse.reset_mock()
     again = await service.revisar(ctx)
-    assert again == {"revisados": 0, "agregados": []}
+    assert again == {"revisados": 0, "clinicos": 0, "agregados": []}
     client.responses.parse.assert_not_called()
-    assert len(ctx.store.read_correo_revision()["avisos"]) == 1
+    assert len(ctx.store.read_correo_revision()["avisos"]) == 2
 
 
 async def test_review_skips_events_already_in_calendar(fakes, tmp_path):

@@ -324,17 +324,23 @@ pacientes, JARVIS no los repite ni los pone en un correo.
 Cloud Scheduler llama `POST /tareas/revisar-correo` a las 6:00, 15:00 y 21:00
 (`infra/cloud-scheduler/programar-revision-correo.sh`). `app/revision_correo.py`:
 
-1. Busca en la bandeja de entrada los correos desde la última revisión (con 10
-   minutos de traslape), sin promociones, redes sociales ni foros. Máximo 15.
-2. Salta los que ya procesó (guarda los últimos 300 id en
+1. Busca en la bandeja de entrada los correos **importantes** (marca de Gmail)
+   desde la última revisión, con 10 minutos de traslape. Sin promociones, redes
+   sociales, foros ni notificaciones (pedidos, envíos, bancos). Máximo 15.
+2. Un correo que parece clínico (paciente, px, expediente, interconsulta,
+   resultados, laboratorio, diagnóstico, receta, estudios de imagen…, en
+   remitente, asunto o extracto) **no se lee completo ni se manda al modelo**.
+   El briefing solo dice «Tiene un correo clínico de [remitente]; revíselo
+   usted», sin el asunto, que puede traer el nombre del paciente.
+3. Salta los que ya procesó (guarda los últimos 300 id en
    `usuarios/{id}/estado/revision_correo`).
-3. Le pasa los textos (2500 caracteres cada uno) al modelo de captura con un
+4. Le pasa los textos (2500 caracteres cada uno) al modelo de captura con un
    esquema estricto y sin herramientas. El modelo solo extrae compromisos con
    fecha y marca `seguro`.
-4. El servidor descarta lo que no es seguro, lo que ya pasó, lo que está a más
+5. El servidor descarta lo que no es seguro, lo que ya pasó, lo que está a más
    de 180 días y lo que ya existe en el calendario ese día con el mismo título y
    hora. Agenda máximo 5 por corrida.
-5. Lo agregado se guarda como aviso y el siguiente `/briefing` lo dice al final
+6. Lo agregado se guarda como aviso y el siguiente `/briefing` lo dice al final
    («De sus correos agregué a su calendario: …») y vacía la lista.
 
 Los correos son de terceros: las instrucciones dicen que son datos, el modelo no
