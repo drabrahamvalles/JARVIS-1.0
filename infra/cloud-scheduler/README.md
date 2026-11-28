@@ -20,3 +20,17 @@ Consulta de solo lectura:
 ```sh
 gcloud scheduler jobs describe jarvis-despertador --project='<PROYECTO>' --location=us-central1
 ```
+
+## jarvis-revisar-correo
+
+| Ajuste | Valor |
+| --- | --- |
+| Horario | `0 6,15,21 * * *`, a las 6:00, 15:00 y 21:00 |
+| Zona horaria | `America/Monterrey` |
+| Destino | `POST https://<URL_CLOUD_RUN>/tareas/revisar-correo` |
+| Autenticación | Encabezado `Authorization: Bearer JARVIS_TOKEN` |
+| Tiempo límite por intento | 180 s |
+
+Se crea o actualiza con `infra/cloud-scheduler/programar-revision-correo.sh '<PROYECTO>' '<URL_CLOUD_RUN>'`.
+El script lee el token de Secret Manager sin imprimirlo. Si se rota `JARVIS_TOKEN`, hay que volver a
+correrlo. Cloud Scheduler da 3 trabajos gratis por cuenta de facturación; con este quedan 2.

@@ -33,6 +33,8 @@ class Store(Protocol):
     def read_pending_email(self) -> dict | None: ...
     def write_pending_email(self, pending: dict | None) -> None: ...
     def read_whoop_token(self) -> dict | None: ...
+    def read_correo_revision(self) -> dict | None: ...
+    def write_correo_revision(self, state: dict) -> None: ...
     def write_whoop_token(self, token: dict) -> None: ...
 
 
@@ -60,6 +62,7 @@ class LocalStore:
         self.pending_path = user_path / "borrado_pendiente.json"
         self.email_path = user_path / "correo_pendiente.json"
         self.whoop_path = user_path / "whoop_token.json"
+        self.revision_path = user_path / "revision_correo.json"
 
     def _read_turns(self, now: datetime) -> list[dict]:
         try:
@@ -127,6 +130,18 @@ class LocalStore:
 
     def write_whoop_token(self, token: dict) -> None:
         timezone_state.write_json_atomically(self.whoop_path, {"usuario_id": self.user_id, **token})
+
+    def read_correo_revision(self) -> dict | None:
+        try:
+            data = json.loads(self.revision_path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return None
+        return data if isinstance(data, dict) and data.get("usuario_id") == self.user_id else None
+
+    def write_correo_revision(self, state: dict) -> None:
+        timezone_state.write_json_atomically(
+            self.revision_path, {"usuario_id": self.user_id, **state}
+        )
 
 
 def _stage_firestore_turn(transaction, counter, turns, turn):
@@ -229,6 +244,17 @@ class FirestoreStore:
     def write_whoop_token(self, token: dict) -> None:
         reference = self._user.collection("estado").document("whoop_token")
         reference.set({"usuario_id": self.user_id, **token}, retry=RPC_RETRY, timeout=RPC_TIMEOUT)
+
+    def read_correo_revision(self) -> dict | None:
+        reference = self._user.collection("estado").document("revision_correo")
+        data = reference.get(retry=RPC_RETRY, timeout=RPC_TIMEOUT).to_dict()
+        if not data or data.get("usuario_id") != self.user_id:
+            return None
+        return data
+
+    def write_correo_revision(self, state: dict) -> None:
+        reference = self._user.collection("estado").document("revision_correo")
+        reference.set({"usuario_id": self.user_id, **state}, retry=RPC_RETRY, timeout=RPC_TIMEOUT)
 
 
 def build_store(env: dict[str, str]) -> Store:

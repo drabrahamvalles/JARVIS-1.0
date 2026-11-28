@@ -8,7 +8,9 @@ autor, el Dr. Abraham Valles. No es un servicio público ni tiene otros usuarios
 - **Gmail (`gmail.readonly` y `gmail.send`).** Busca y lee correos cuando el
   usuario se lo pide por voz, para resumirlos. Envía un correo nuevo solo
   cuando el usuario lo dicta y después confirma con un «sí» explícito. No
-  borra, no archiva y no modifica correos.
+  borra, no archiva y no modifica correos. Tres veces al día revisa los correos
+  nuevos para agendar citas y fechas límite; para eso el texto de esos correos
+  se manda a la API de OpenAI, sin guardarse.
 - **Google Calendar.** Consulta, crea y borra eventos en los calendarios que el
   usuario compartió con la cuenta de servicio del proyecto. Para borrar pide
   confirmación.

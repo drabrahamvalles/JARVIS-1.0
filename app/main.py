@@ -11,8 +11,11 @@ from starlette.concurrency import run_in_threadpool
 
 from app.brain import Brain, BrainError
 from app.briefing import Briefing, BriefingError
+from app.calendario import CalendarioError, CalendarioNoConfigurado
 from app.context import TimezoneResolver, active_timezone
+from app.gmail import GmailError, GmailNoConfigurado
 from app.registry import ToolRegistry
+from app.revision_correo import RevisorCorreo, notice_sentence
 from app.schemas import (
     AskRequest,
     AskResponse,
@@ -38,6 +41,23 @@ bearer = HTTPBearer(auto_error=False)
 WHOOP_PENDIENTE = (
     "WHOOP todavía está calculando su noche; en cuanto termine le doy su recuperación."
 )
+
+
+async def append_email_notices(answer: str, context) -> str:
+    """Agrega al briefing lo que la revisión de correo agendó y vacía la lista de avisos."""
+    store = context.store
+    if store is None:
+        return answer
+    try:
+        state = await run_in_threadpool(store.read_correo_revision)
+        sentence = notice_sentence((state or {}).get("avisos") or [])
+        if sentence is None:
+            return answer
+        await run_in_threadpool(store.write_correo_revision, {**state, "avisos": []})
+    except Exception as exc:
+        logger.warning("storage_failed operation=email_notices kind=%s", type(exc).__name__)
+        return answer
+    return f"{answer} {sentence}"
 
 
 async def whoop_summary(context) -> dict | None:
@@ -72,6 +92,7 @@ def create_app(
         app.state.brain = None
         app.state.briefing = None
         app.state.captura = None
+        app.state.revisor = None
         try:
             if app.state.secrets.openai_api_key:
                 client = AsyncOpenAI(
@@ -84,6 +105,7 @@ def create_app(
                 )
                 app.state.briefing = Briefing(client, app.state.config, personality)
                 app.state.captura = Captura(client, app.state.config, personality)
+                app.state.revisor = RevisorCorreo(client, app.state.config)
             else:
                 logger.warning("OPENAI_API_KEY no configurada; endpoints de OpenAI no disponibles")
             if not app.state.secrets.jarvis_token:
@@ -169,6 +191,7 @@ def create_app(
                 answer, whoop = await asyncio.gather(
                     service.create(payload, context), whoop_summary(context)
                 )
+                answer = await append_email_notices(answer, context)
             # El texto de WHOOP lo arma el servidor con los números exactos.
             if whoop is None or whoop["estado"] == "sin_datos":
                 return BriefingResponse(respuesta=answer)
@@ -211,6 +234,33 @@ def create_app(
         except (APIStatusError, APIConnectionError, CapturaError) as exc:
             logger.warning("captura_failed kind=%s", type(exc).__name__)
             raise HTTPException(502, "No fue posible analizar la captura") from None
+
+    @application.post("/tareas/revisar-correo", dependencies=[Depends(require_token)])
+    async def revisar_correo(request: Request) -> dict:
+        """Cloud Scheduler la llama a las 6:00, 15:00 y 21:00."""
+        service = request.app.state.revisor
+        if service is None:
+            raise HTTPException(503, "OPENAI_API_KEY no configurada")
+        context = await run_in_threadpool(
+            request.app.state.resolver.resolve, WhoopRequest(), request.app.state.config
+        )
+        try:
+            async with asyncio.timeout(150):
+                return await service.revisar(context)
+        except (GmailNoConfigurado, CalendarioNoConfigurado):
+            raise HTTPException(503, "Gmail o Calendar no están conectados") from None
+        except (
+            GmailError,
+            CalendarioError,
+            TimeoutError,
+            APIStatusError,
+            APIConnectionError,
+            APITimeoutError,
+            RateLimitError,
+            RuntimeError,
+        ) as exc:
+            logger.warning("revision_correo_failed kind=%s", type(exc).__name__)
+            raise HTTPException(502, "No fue posible revisar el correo") from None
 
     @application.post("/whoop", response_model=WhoopResponse, dependencies=[Depends(require_token)])
     async def whoop(payload: WhoopRequest, request: Request) -> WhoopResponse:
