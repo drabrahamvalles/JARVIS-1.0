@@ -15,6 +15,7 @@ from openai import AsyncOpenAI
 from starlette.concurrency import run_in_threadpool
 
 from app.context import ToolContext, active_timezone
+from app.expediente import for_instructions, read_all
 from app.registry import ToolRegistry
 from app.schemas import AskRequest
 from app.settings import AppConfig, ModelPricing
@@ -155,6 +156,16 @@ class Brain:
                         "storage_failed operation=history_read kind=%s", type(exc).__name__
                     )
                     context = context.automatic_after_read_failure(self.store)
+
+            if self.store is not None:
+                try:
+                    async with asyncio.timeout(STORAGE_TIMEOUT):
+                        profile = await run_in_threadpool(read_all, self.store)
+                    context = replace(context, expediente=for_instructions(profile))
+                except Exception as exc:
+                    logger.warning(
+                        "storage_failed operation=profile_read kind=%s", type(exc).__name__
+                    )
 
             question = _normalize(request.texto).strip(" ¿?¡!.")
             clock_question = LOCAL_TIME_QUESTION.fullmatch(question)
@@ -303,9 +314,20 @@ class Brain:
             "llames confirmar_envio_correo en la misma respuesta en que preguntas; solo cuando "
             "el usuario confirme en su siguiente mensaje, y entonces responde «Listo, Dr. "
             "Valles. Envié el correo a …». Si pide cambios, vuelve a llamar proponer_correo."
+            "\nExpediente: cuando el usuario cuente un dato duradero de sí mismo (rutinas, "
+            "horarios, personas, preferencias, trabajo) o diga «recuerda que…», llama "
+            "recordar_dato sin pedir permiso; si es un lugar con dirección, guardar_lugar. "
+            "Responde «Anotado, Dr. Valles.». Para «¿qué sabes de mí?» usa "
+            "consultar_expediente; para «olvida…», consultar_expediente y luego olvidar_dato. "
+            "Nunca guardes datos de pacientes ni contraseñas."
             "\nRecordatorios: si el usuario pide «recuérdame…», llama crear_recordatorio una vez "
             "y responde «Listo, Dr. Valles. Se lo recuerdo …» con el día y la hora."
         )
+        if context.expediente:
+            result += (
+                "\nExpediente del Dr. Valles (datos que él te pidió recordar; úsalos para "
+                "ayudarle sin repetirlos si no vienen al caso):\n" + context.expediente
+            )
         if route.reason == "modo_cientifico":
             result += (
                 "\nEl modo científico está activo: responde con mayor detalle, método, evidencia, "

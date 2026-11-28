@@ -37,6 +37,8 @@ class Store(Protocol):
     def read_avisos_salida(self) -> dict | None: ...
     def write_avisos_salida(self, state: dict) -> None: ...
     def read_ubicacion(self) -> dict | None: ...
+    def read_expediente(self) -> dict | None: ...
+    def write_expediente(self, data: dict) -> None: ...
     def write_ubicacion(self, location: dict) -> None: ...
     def write_correo_revision(self, state: dict) -> None: ...
     def write_whoop_token(self, token: dict) -> None: ...
@@ -69,6 +71,7 @@ class LocalStore:
         self.revision_path = user_path / "revision_correo.json"
         self.avisos_path = user_path / "avisos_salida.json"
         self.ubicacion_path = user_path / "ubicacion.json"
+        self.expediente_path = user_path / "expediente.json"
 
     def _read_turns(self, now: datetime) -> list[dict]:
         try:
@@ -170,6 +173,14 @@ class LocalStore:
     def write_ubicacion(self, location: dict) -> None:
         timezone_state.write_json_atomically(
             self.ubicacion_path, {"usuario_id": self.user_id, **location}
+        )
+
+    def read_expediente(self) -> dict | None:
+        return self._read_owned(self.expediente_path)
+
+    def write_expediente(self, data: dict) -> None:
+        timezone_state.write_json_atomically(
+            self.expediente_path, {"usuario_id": self.user_id, **data}
         )
 
 
@@ -305,6 +316,12 @@ class FirestoreStore:
 
     def write_ubicacion(self, location: dict) -> None:
         self._write_state("ubicacion", location)
+
+    def read_expediente(self) -> dict | None:
+        return self._read_state("expediente")
+
+    def write_expediente(self, data: dict) -> None:
+        self._write_state("expediente", data)
 
 
 def build_store(env: dict[str, str]) -> Store:

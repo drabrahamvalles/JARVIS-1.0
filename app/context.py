@@ -50,6 +50,8 @@ class ToolContext:
     texto_usuario: str = field(default="", repr=False)
     # Acciones que el Atajo debe ejecutar en el iPhone (por ahora, recordatorios).
     acciones: list[dict[str, str | None]] = field(default_factory=list, repr=False, compare=False)
+    # Resumen del expediente del usuario para las instrucciones del modelo.
+    expediente: str | None = field(default=None, repr=False, compare=False)
 
     def read_timezone(self) -> TimezoneState:
         return self.timezone_session.state if self.timezone_session else read_timezone_state()

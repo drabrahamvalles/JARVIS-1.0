@@ -347,6 +347,25 @@ Los correos son de terceros: las instrucciones dicen que son datos, el modelo no
 tiene herramientas y lo único que puede salir de ahí es un evento validado por el
 servidor. Los títulos no llevan datos de pacientes.
 
+## Expediente del Dr. Valles
+
+`app/expediente.py` guarda en `usuarios/{id}/estado/expediente` lo que JARVIS
+aprende de él:
+
+- **Datos** (`recordar_dato`): rutinas, preferencias, personas, trabajo y su
+  propia salud, que él cuenta («como a las dos», «recuerda que los martes doy
+  clase»). El modelo los guarda sin pedir permiso y responde «Anotado». Se quitan
+  duplicados; máximo 60, se olvida lo más viejo.
+- **Lugares** (`guardar_lugar`): nombre y dirección («Consultorio», «Casa de la
+  abuela»). Si un evento dice solo «Consultorio» o el título lo menciona, los
+  avisos de salida usan esa dirección para calcular el tráfico.
+- **Hábitos de sueño**: hora promedio de dormir y despertar de las últimas 14
+  noches de WHOOP (promedio circular, para que 23:50 y 00:10 den 00:00).
+
+En cada `/ask` el servidor lee el expediente y lo agrega a las instrucciones del
+modelo. «¿Qué sabes de mí?» usa `consultar_expediente`; «olvida…», `olvidar_dato`.
+Nunca se guardan datos de pacientes ni contraseñas.
+
 ## Avisos de salida (fase 3)
 
 `app/avisos.py`, llamado por el despertador cada 10 minutos de 4:00 a 23:50

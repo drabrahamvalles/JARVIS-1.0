@@ -22,6 +22,9 @@ autor, el Dr. Abraham Valles. No es un servicio público ni tiene otros usuarios
 - **Ubicación aproximada** del iPhone, para la zona horaria, el clima y los avisos
   de salida. Se guarda solo la última, y con ella y el lugar del evento se le pide
   a Google Maps el tiempo de camino.
+- **Expediente.** Lo que el usuario le pide recordar (rutinas, personas, lugares
+  frecuentes) se guarda en Firestore y se le pasa al modelo en cada pregunta para
+  personalizar las respuestas. Él puede consultarlo y borrar cualquier dato.
 - **Avisos de voz.** Los avisos de salida son correos de JARVIS a la propia
   cuenta del usuario («Aviso de JARVIS»), que un Atajo del iPhone lee en voz
   alta. No salen a nadie más.

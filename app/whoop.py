@@ -11,9 +11,11 @@ nunca los calcula.
 """
 
 import asyncio
+import cmath
 import hashlib
 import json
 import logging
+import math
 import os
 import threading
 import time
@@ -288,6 +290,11 @@ class Whoop:
             raise WhoopError(f"HTTP {response.status_code}")
         return response.json()
 
+    async def sleep_habits(self, zone_name: str, store: Store | None) -> dict[str, Any] | None:
+        """Horas promedio de dormir y despertar de las últimas dos semanas."""
+        sleeps = await self._get("activity/sleep", {"limit": 25}, store)
+        return sleep_habits_from((sleeps or {}).get("records") or [], zone_name)
+
     async def summary(self, zone_name: str, store: Store | None) -> dict[str, Any]:
         # El primer GET refresca el token; los otros dos lo reutilizan.
         recovery = await self._get("recovery", {"limit": 1}, store)
@@ -302,6 +309,32 @@ class Whoop:
             (cycles or {}).get("records") or [],
             zone_name,
         )
+
+
+def _clock_average(moments: list[datetime]) -> str:
+    """Promedio de horas del día en un círculo (23:50 y 00:10 promedian 00:00)."""
+    angles = [2 * math.pi * (m.hour * 60 + m.minute) / 1440 for m in moments]
+    mean = cmath.phase(sum(cmath.exp(1j * angle) for angle in angles))
+    minutes = round((mean % (2 * math.pi)) / (2 * math.pi) * 1440) % 1440
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+
+def sleep_habits_from(sleeps: list[dict[str, Any]], zone_name: str) -> dict[str, Any] | None:
+    zone = ZoneInfo(zone_name)
+    nights = [
+        item for item in sleeps if not item.get("nap") and item.get("start") and item.get("end")
+    ][:14]
+    if len(nights) < 3:
+        return None
+
+    def local(value: str) -> datetime:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(zone)
+
+    return {
+        "se_duerme": _clock_average([local(item["start"]) for item in nights]),
+        "despierta": _clock_average([local(item["end"]) for item in nights]),
+        "noches": len(nights),
+    }
 
 
 _client: Whoop | None = None

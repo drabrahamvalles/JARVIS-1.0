@@ -26,6 +26,8 @@ en pruebas.
 | 4.4 | Recordatorios por voz | Servidor listo, falta el Atajo |
 | 5 | WHOOP: recuperación y sueño en el briefing | Conectado y validado (27/11/2026); falta la espera en el Atajo BRIEFING |
 | 5.1 | Revisión de correo a las 6, 15 y 21 h que agenda sola | Validada (27/11/2026) |
+| 5.2 | Expediente: datos, lugares frecuentes y hábitos de sueño | Construida (27/11/2026) |
+| 5.3 | WhatsApp: lector en Mac siempre prendida | Pendiente (28/11/2026): revisar la Mac vieja |
 | 3 | Avisos de salida en voz con tráfico real (Routes API) | Construida (27/11/2026); falta el Atajo de voz |
 | 6 | Voz propia, panel web, conversación con interrupción, "Hey Jarvis" en la Mac | Pendiente |
 | 7 | FRIDAY: agente en la Mac que ejecuta tareas | Pendiente |

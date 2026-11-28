@@ -29,6 +29,8 @@ import httpx
 from starlette.concurrency import run_in_threadpool
 
 from app.calendario import Evento, get_calendar
+from app.expediente import read_all as read_profile
+from app.expediente import resolve_place
 from app.gmail import get_gmail
 from app.storage import Store
 
@@ -215,6 +217,10 @@ class Avisos:
             except (KeyError, TypeError, ValueError):
                 here = None
 
+        try:
+            places = (await run_in_threadpool(read_profile, store))["lugares"]
+        except Exception:
+            places = []
         events = await get_calendar().list_events(now.date(), (now + HORIZONTE).date(), zone_name)
         spoken = []
         for event in events:
@@ -222,6 +228,10 @@ class Avisos:
             if start is None or not now <= start <= now + HORIZONTE:
                 continue
             plan = plan_for(event, start, self.airports)
+            # «Consultorio» o «Cita en el hospital» se traducen a la dirección guardada.
+            saved = resolve_place(places, event.lugar, event.titulo)
+            if saved and not ("vuelo" in event.titulo.casefold() and event.lugar):
+                plan = Plan(plan.llegada, saved, plan.motivo)
             if plan.llegada - now > PRIMER_CALCULO:
                 continue
             info = tracked.setdefault(f"{event.id}@{event.inicio}", {})
