@@ -56,13 +56,21 @@ def add_fact(store: Store, category: str, text: str) -> dict[str, str]:
     return fact
 
 
-def save_place(store: Store, name: str, address: str) -> dict[str, str]:
+def save_place(
+    store: Store,
+    name: str,
+    address: str,
+    lat: float | None = None,
+    lon: float | None = None,
+) -> dict[str, Any]:
     data = _load(store)
     name = " ".join(name.split())[:80]
     address = " ".join(address.split())[:MAX_TEXTO]
     key = normalized(name)
     places = [place for place in data["lugares"] if normalized(place["nombre"]) != key]
-    place = {"id": secrets.token_hex(4), "nombre": name, "direccion": address}
+    place: dict[str, Any] = {"id": secrets.token_hex(4), "nombre": name, "direccion": address}
+    if lat is not None and lon is not None:
+        place["lat"], place["lon"] = round(lat, 6), round(lon, 6)
     data["lugares"] = (places + [place])[-MAX_DATOS:]
     _save(store, data)
     return place
@@ -83,8 +91,9 @@ def read_all(store: Store) -> dict[str, Any]:
     return _load(store)
 
 
-def resolve_place(places: list[dict[str, str]], *texts: str | None) -> str | None:
-    """Dirección de un lugar guardado si el lugar o el título del evento lo nombra."""
+def resolve_place(places: list[dict[str, Any]], *texts: str | None) -> str | None:
+    """Destino de un lugar guardado si el lugar o el título del evento lo nombra: sus
+    coordenadas («lat,lon») si las tiene, si no su dirección."""
     for text in texts:
         if not text:
             continue
@@ -92,6 +101,8 @@ def resolve_place(places: list[dict[str, str]], *texts: str | None) -> str | Non
         for place in sorted(places, key=lambda p: -len(p["nombre"])):
             name = normalized(place["nombre"])
             if name and (value == name or f" {name} " in f" {value} "):
+                if place.get("lat") is not None:
+                    return f"{place['lat']},{place['lon']}"
                 return place["direccion"]
     return None
 

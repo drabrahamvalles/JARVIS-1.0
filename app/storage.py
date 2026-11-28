@@ -38,6 +38,10 @@ class Store(Protocol):
     def write_avisos_salida(self, state: dict) -> None: ...
     def read_ubicacion(self) -> dict | None: ...
     def read_expediente(self) -> dict | None: ...
+    def read_rutina(self) -> dict | None: ...
+    def write_rutina(self, state: dict) -> None: ...
+    def read_ubicaciones(self) -> dict | None: ...
+    def write_ubicaciones(self, log: dict) -> None: ...
     def write_expediente(self, data: dict) -> None: ...
     def write_ubicacion(self, location: dict) -> None: ...
     def write_correo_revision(self, state: dict) -> None: ...
@@ -72,6 +76,8 @@ class LocalStore:
         self.avisos_path = user_path / "avisos_salida.json"
         self.ubicacion_path = user_path / "ubicacion.json"
         self.expediente_path = user_path / "expediente.json"
+        self.rutina_path = user_path / "rutina.json"
+        self.ubicaciones_path = user_path / "ubicaciones.json"
 
     def _read_turns(self, now: datetime) -> list[dict]:
         try:
@@ -181,6 +187,22 @@ class LocalStore:
     def write_expediente(self, data: dict) -> None:
         timezone_state.write_json_atomically(
             self.expediente_path, {"usuario_id": self.user_id, **data}
+        )
+
+    def read_rutina(self) -> dict | None:
+        return self._read_owned(self.rutina_path)
+
+    def write_rutina(self, state: dict) -> None:
+        timezone_state.write_json_atomically(
+            self.rutina_path, {"usuario_id": self.user_id, **state}
+        )
+
+    def read_ubicaciones(self) -> dict | None:
+        return self._read_owned(self.ubicaciones_path)
+
+    def write_ubicaciones(self, log: dict) -> None:
+        timezone_state.write_json_atomically(
+            self.ubicaciones_path, {"usuario_id": self.user_id, **log}
         )
 
 
@@ -322,6 +344,18 @@ class FirestoreStore:
 
     def write_expediente(self, data: dict) -> None:
         self._write_state("expediente", data)
+
+    def read_rutina(self) -> dict | None:
+        return self._read_state("rutina")
+
+    def write_rutina(self, state: dict) -> None:
+        self._write_state("rutina", state)
+
+    def read_ubicaciones(self) -> dict | None:
+        return self._read_state("ubicaciones")
+
+    def write_ubicaciones(self, log: dict) -> None:
+        self._write_state("ubicaciones", log)
 
 
 def build_store(env: dict[str, str]) -> Store:

@@ -28,25 +28,23 @@ def event(title="Cita", start="2026-11-28 12:00", place="Hospital Zambrano", all
 def test_flights_arrive_two_or_three_hours_before():
     national = plan_for(event("Vuelo MTY → MEX (VB 1151)", place=None), at(10), AIRPORTS)
     assert national.llegada == at(8) and national.destino == "Aeropuerto de Monterrey"
-    assert "como es nacional, debe estar en el aeropuerto 2 horas antes, a las 08:00" in (
-        national.motivo
-    )
+    assert national.frase == "al aeropuerto para tomar su vuelo"
     international = plan_for(event("Vuelo MTY → IAH (UA 1234)", place=None), at(10), AIRPORTS)
-    assert international.llegada == at(7) and "internacional" in international.motivo
-    normal = plan_for(event(), at(12), AIRPORTS)
-    assert normal.llegada == at(12) and normal.motivo == "su Cita es a las 12:00"
+    assert international.llegada == at(7)
+    normal = plan_for(event("Junta de residentes"), at(12), AIRPORTS)
+    assert normal.llegada == at(12) and normal.frase == "para su junta de residentes"
+    # Siglas al inicio se respetan.
+    assert plan_for(event("IMSS guardia"), at(12), AIRPORTS).frase == "para su IMSS guardia"
 
 
-def test_messages():
+def test_messages_are_short():
+    flight = plan_for(event("Vuelo MTY → MIA", place=None), at(15), AIRPORTS)
+    assert message_for("aviso_15", flight) == (
+        "Doctor, le recuerdo salir en 15 minutos al aeropuerto para tomar su vuelo."
+    )
     plan = plan_for(event(), at(12), AIRPORTS)
-    assert message_for("aviso_15", plan, 30) == (
-        "Doctor, le recomiendo salir en 15 minutos: su Cita es a las 12:00. "
-        "Hay 30 minutos de camino."
-    )
-    assert message_for("aviso_hora", plan, 30).startswith("Doctor, ya es hora de salir")
-    assert message_for("aviso_tarde", plan, 30).startswith(
-        "Doctor, ya se tiene que ir, ya va tarde"
-    )
+    assert message_for("aviso_hora", plan) == "Doctor, ya es hora de salir para su cita."
+    assert message_for("aviso_tarde", plan) == "Doctor, ya va tarde: salga ya para su cita."
 
 
 def test_distance():
@@ -151,10 +149,10 @@ async def test_three_spoken_alerts_when_he_does_not_leave(world):
     await tick(service, store, at(11, 30))
     await tick(service, store, at(11, 40))  # No repite.
     bodies = [body for _, _, body in fake_gmail.sent]
-    assert [body.split(":")[0] for body in bodies] == [
-        "Doctor, le recomiendo salir en 15 minutos",
-        "Doctor, ya es hora de salir",
-        "Doctor, ya se tiene que ir, ya va tarde",
+    assert bodies == [
+        "Doctor, le recuerdo salir en 15 minutos para su cita.",
+        "Doctor, ya es hora de salir para su cita.",
+        "Doctor, ya va tarde: salga ya para su cita.",
     ]
     assert all(
         to == ["dr@example.com"] and subject == "Aviso de JARVIS"
@@ -178,14 +176,14 @@ async def test_heavier_traffic_moves_the_alert_earlier(world):
     await tick(service, store, at(10, 40))  # Ahora 50 min: salir 11:10 → aviso de 15 a las 10:50.
     assert fake_gmail.sent == []
     await tick(service, store, at(10, 50))
-    assert len(fake_gmail.sent) == 1 and "Hay 50 minutos de camino" in fake_gmail.sent[0][2]
+    assert len(fake_gmail.sent) == 1 and "15 minutos" in fake_gmail.sent[0][2]
 
 
 async def test_late_start_skips_to_the_current_alert(world):
     store, fake_gmail, build = world
     service, _ = build([30])
     await tick(service, store, at(11, 27))  # Ya pasó el de 15: solo el de «ya es hora».
-    assert [body.split(":")[0] for _, _, body in fake_gmail.sent] == ["Doctor, ya es hora de salir"]
+    assert [body for _, _, body in fake_gmail.sent] == ["Doctor, ya es hora de salir para su cita."]
 
 
 async def test_without_place_one_simple_alert(world):
@@ -196,9 +194,7 @@ async def test_without_place_one_simple_alert(world):
     await tick(service, store, at(11, 35))
     await tick(service, store, at(11, 45))
     assert routes.calls == []
-    assert [body for _, _, body in fake_gmail.sent] == [
-        "Doctor, ya es hora de salir: su Cita es a las 12:00."
-    ]
+    assert [body for _, _, body in fake_gmail.sent] == ["Doctor, ya es hora de salir para su cita."]
 
 
 def test_location_is_remembered_and_endpoint_needs_token(client):

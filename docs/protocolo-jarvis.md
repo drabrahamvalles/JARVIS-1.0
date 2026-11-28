@@ -28,14 +28,32 @@ en pruebas.
 | 5.1 | Revisión de correo a las 6, 15 y 21 h que agenda sola | Validada (27/11/2026) |
 | 5.2 | Expediente: datos, lugares frecuentes y hábitos de sueño | Construida (27/11/2026) |
 | 5.3 | WhatsApp: lector en Mac siempre prendida | Pendiente (28/11/2026): revisar la Mac vieja |
+| 5.4 | Aprender lugares y patrones por ubicación; preguntas por iniciativa propia (misa del domingo) | Construida (28/11/2026); faltan los Atajos de ubicación y de respuesta |
 | 3 | Avisos de salida en voz con tráfico real (Routes API) | Construida (27/11/2026); falta el Atajo de voz |
 | 6 | Voz propia, panel web, conversación con interrupción, "Hey Jarvis" en la Mac | Pendiente |
 | 7 | FRIDAY: agente en la Mac que ejecuta tareas | Pendiente |
 | 8 | WhatsApp con capturas y borradores | Pendiente |
 | 9 | Cuarto y consultorio | Pendiente |
+| 10 | Fenotipado digital por voz | Idea; detalle en el protocolo de Claude Docs |
+| 11 | Teléfono de JARVIS: agenda citas con otras personas | Idea (28/11/2026) |
 
 El orden cambió: WHOOP necesita la memoria de la fase 4, así que va antes
 que las rutas.
+
+## Fase 11: teléfono de JARVIS (idea, 28/11/2026)
+
+JARVIS tendría su propio número. Cuando alguien me pida una cita («¿puedo verte el
+jueves?»), le paso ese número y JARVIS se encarga:
+
+- Revisa mi calendario. Si el día y la hora están libres, agenda la cita y lo
+  confirma.
+- Si están ocupados, dice que ese horario no se puede y ofrece otros huecos («el
+  jueves a las 3 no, pero puede el jueves a las 5 o el viernes a las 10»).
+- Me avisa de cada cita que agendó.
+
+Antes de construirla hay que decidir: llamadas de voz, WhatsApp o ambos; qué
+horarios ofrece; y qué puede agendar sin preguntarme. Un número telefónico tiene
+costo mensual, así que necesita mi aprobación (regla de AGENTS.md).
 
 ## Decisiones
 
@@ -67,6 +85,10 @@ que las rutas.
 - Voz: Siri Voz 2 por ahora. La voz propia llega en la fase 6.
 
 ## Pendientes con fecha
+
+- Revisar la ubicación exacta de casa y trabajo: el pin de Casa en Mapas quedó
+  a ~150 m porque la dirección de Mi tarjeta no tiene número exterior. Corregirlo
+  antes de que JARVIS aprenda lugares (fase 5.4).
 
 - Antes del 21/01/2027: activar la cuenta de pago de Google Cloud y usar
   el crédito restante.

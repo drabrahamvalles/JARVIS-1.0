@@ -2,7 +2,7 @@ import asyncio
 import logging
 import secrets as secure
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 import httpx
@@ -19,6 +19,7 @@ from app.context import TimezoneResolver, active_timezone
 from app.gmail import GmailError, GmailNoConfigurado
 from app.registry import ToolRegistry
 from app.revision_correo import RevisorCorreo, notice_sentence
+from app.rutina import Rutina, distance_m
 from app.schemas import (
     AskRequest,
     AskResponse,
@@ -46,6 +47,20 @@ WHOOP_PENDIENTE = (
 )
 
 
+def append_location_log(store, location: dict) -> None:
+    """Historial para aprender lugares; se salta puntos repetidos de menos de 20 minutos."""
+    log = store.read_ubicaciones() or {}
+    points = list(log.get("puntos") or [])
+    if points:
+        last = points[-1]
+        recent = datetime.fromisoformat(location["en"]) - datetime.fromisoformat(last["en"])
+        close = distance_m((last["lat"], last["lon"]), (location["lat"], location["lon"])) < 100
+        if recent < timedelta(minutes=20) and close:
+            return
+    points.append({k: location[k] for k in ("lat", "lon", "en")})
+    store.write_ubicaciones({"puntos": points[-1000:]})
+
+
 async def remember_location(context) -> None:
     """Guarda la última ubicación del iPhone para calcular los avisos de salida."""
     if context.store is None or context.lat is None or context.lon is None:
@@ -57,6 +72,7 @@ async def remember_location(context) -> None:
     }
     try:
         await run_in_threadpool(context.store.write_ubicacion, location)
+        await run_in_threadpool(append_location_log, context.store, location)
     except Exception as exc:
         logger.warning("storage_failed operation=location_write kind=%s", type(exc).__name__)
 
@@ -262,6 +278,17 @@ def create_app(
             logger.warning("captura_failed kind=%s", type(exc).__name__)
             raise HTTPException(502, "No fue posible analizar la captura") from None
 
+    @application.post("/ubicacion", dependencies=[Depends(require_token)])
+    async def ubicacion(payload: WhoopRequest, request: Request) -> dict:
+        """El Atajo automático manda aquí la ubicación cada 2 horas para aprender lugares."""
+        if payload.lat is None or payload.lon is None:
+            raise HTTPException(422, "Faltan lat y lon")
+        context = await run_in_threadpool(
+            request.app.state.resolver.resolve, payload, request.app.state.config
+        )
+        await remember_location(context)
+        return {"ok": True}
+
     @application.post("/tareas/avisos", dependencies=[Depends(require_token)])
     async def avisos(request: Request) -> dict:
         """El despertador la llama cada 10 minutos: avisa cuándo salir a cada evento."""
@@ -274,7 +301,10 @@ def create_app(
         zone, _ = active_timezone(context)
         try:
             async with asyncio.timeout(60):
-                return await service.run(context.store, zone)
+                result = await service.run(context.store, zone)
+                # Aprender lugares y hacer preguntas por iniciativa propia (según la hora).
+                result.update(await Rutina(service.speak).run(context.store, zone))
+                return result
         except (CalendarioNoConfigurado, GmailNoConfigurado):
             return {"hablados": []}
         except (CalendarioError, GmailError, TimeoutError, httpx.HTTPError) as exc:

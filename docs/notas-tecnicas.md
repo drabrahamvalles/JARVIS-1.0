@@ -366,6 +366,31 @@ En cada `/ask` el servidor lee el expediente y lo agrega a las instrucciones del
 modelo. «¿Qué sabes de mí?» usa `consultar_expediente`; «olvida…», `olvidar_dato`.
 Nunca se guardan datos de pacientes ni contraseñas.
 
+## Rutina: lugares aprendidos y preguntas por iniciativa propia (fase 5.4)
+
+`app/rutina.py` corre al final de cada `/tareas/avisos` y decide por la hora:
+
+- **Historial de ubicación.** `POST /ubicacion` (Atajo automático cada pocas
+  horas) y cada `/ask`, `/briefing` o `/captura` agregan un punto a
+  `estado/ubicaciones`; se salta un punto si el anterior es de hace menos de 20
+  minutos y a menos de 100 m. Se guardan 60 días.
+- **Aprender (22:00, una vez al día).** Agrupa los puntos en lugares de 150 m de
+  radio; un lugar cuenta si tiene 5 puntos en 3 días distintos. Para cada uno saca
+  días de la semana y horario (percentiles 10 y 90). Si coincide con un lugar
+  guardado (300 m), anota en el expediente «Suele estar en Hospital entre semana,
+  de 9:00 a 14:00» (origen `aprendido`, se reemplaza cada noche) y avisa si hace
+  más de 21 días que no va. Los que no tienen nombre quedan en `sin_nombre`.
+- **Preguntar (19:00 a 21:30, solo si está en casa, máximo una por tarde).** Los
+  sábados: «Doctor, ¿a qué misa y a qué hora va a ir mañana?». Los demás días, por
+  un lugar frecuente sin nombre: «¿Es su casa?» o «¿Qué lugar es?». La pregunta se
+  dice por el canal de voz y se guarda en el historial, así la respuesta en `/ask`
+  llega con contexto: el modelo llama `nombrar_lugar_frecuente` o agenda la misa.
+- «Estar en casa» = la última ubicación (de menos de 2 h) a menos de 300 m del
+  lugar «Casa» guardado con coordenadas (`guardar_lugar` con `aqui=true`).
+
+Los lugares con coordenadas se mandan a Routes API como `latLng`, no como
+dirección, así no dependen de que la dirección esté completa.
+
 ## Avisos de salida (fase 3)
 
 `app/avisos.py`, llamado por el despertador cada 10 minutos de 4:00 a 23:50

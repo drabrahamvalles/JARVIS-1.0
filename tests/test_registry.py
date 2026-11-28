@@ -20,6 +20,7 @@ def test_builtin_discovery_and_strict_schema():
         "consultar_whoop",
         "consultar_expediente",
         "guardar_lugar",
+        "nombrar_lugar_frecuente",
         "olvidar_dato",
         "recordar_dato",
         "consultar_agenda",

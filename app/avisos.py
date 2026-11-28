@@ -7,9 +7,9 @@ El despertador de Cloud Scheduler llama POST /tareas/avisos cada 10 minutos de 4
    nacional (aeropuertos de config.yaml).
 2. Hora real de salida = llegada − camino con tráfico (Routes API, con la predicción para
    la hora de salida). Desde una hora antes de salir se recalcula cada 15 minutos.
-3. Tres avisos: 20 min antes de la hora real («salga en 15 minutos», con 5 de colchón),
-   5 min antes («ya es hora de salir») y a la hora real, solo si sigue donde estaba
-   («ya se tiene que ir, ya va tarde»).
+3. Tres avisos cortos: 20 min antes de la hora real («le recuerdo salir en 15 minutos
+   al aeropuerto para tomar su vuelo», con 5 de colchón), 5 min antes («ya es hora de
+   salir…») y a la hora real, solo si sigue donde estaba («ya va tarde: salga ya…»).
 
 Para que el iPhone hable sin que lo toquen, cada aviso es un correo de JARVIS a la misma
 cuenta de Gmail con el asunto «Aviso de JARVIS»; un Atajo con el disparador de correo lo
@@ -58,6 +58,17 @@ _IATA = re.compile(r"\b[A-Z]{3}\b")
 AVISOS = (("aviso_15", 20), ("aviso_hora", 5), ("aviso_tarde", 0))
 
 
+_COORDS = re.compile(r"^\s*(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\s*$")
+
+
+def _waypoint(destination: str) -> dict[str, Any]:
+    match = _COORDS.match(destination)
+    if match:
+        lat, lon = float(match[1]), float(match[2])
+        return {"location": {"latLng": {"latitude": lat, "longitude": lon}}}
+    return {"address": destination}
+
+
 def distance_m(a: tuple[float, float], b: tuple[float, float]) -> float:
     lat1, lon1, lat2, lon2 = map(math.radians, (*a, *b))
     h = (
@@ -71,14 +82,19 @@ def distance_m(a: tuple[float, float], b: tuple[float, float]) -> float:
 class Plan:
     llegada: datetime
     destino: str | None
-    motivo: str
+    # Frase corta para la voz: «al aeropuerto para tomar su vuelo», «para su cita».
+    frase: str
+
+
+def _lower_first(text: str) -> str:
+    return text[:1].lower() + text[1:] if text[:2] != text[:2].upper() else text
 
 
 def plan_for(event: Evento, start: datetime, airports: dict[str, str]) -> Plan:
-    """Hora a la que hay que llegar, a dónde y cómo explicarlo."""
+    """Hora a la que hay que llegar, a dónde y cómo decirlo en pocas palabras."""
     title = event.titulo
     if "vuelo" not in title.casefold():
-        return Plan(start, event.lugar, f"su {title} es a las {start:%H:%M}")
+        return Plan(start, event.lugar, f"para su {_lower_first(title)}")
     codes = _IATA.findall(title)
     national = bool(codes) and all(code in airports for code in codes)
     lead = ANTICIPO_NACIONAL if national else ANTICIPO_INTERNACIONAL
@@ -89,24 +105,16 @@ def plan_for(event: Evento, start: datetime, airports: dict[str, str]) -> Plan:
         destination = f"Aeropuerto de {airports[first]}"
     else:
         destination = f"Aeropuerto {first}" if first else None
-    arrive = start - lead
-    hours = int(lead.total_seconds() // 3600)
-    kind = "nacional" if national else "internacional"
-    return Plan(
-        arrive,
-        destination,
-        f"su vuelo sale a las {start:%H:%M}; como es {kind}, debe estar en el aeropuerto "
-        f"{hours} horas antes, a las {arrive:%H:%M}",
-    )
+    return Plan(start - lead, destination, "al aeropuerto para tomar su vuelo")
 
 
-def message_for(notice: str, plan: Plan, minutes: int | None) -> str:
-    way = f" Hay {minutes} minutos de camino." if minutes is not None else ""
+def message_for(notice: str, plan: Plan) -> str:
+    """Avisos cortos: lo justo para saber qué hacer."""
     if notice == "aviso_15":
-        return f"Doctor, le recomiendo salir en 15 minutos: {plan.motivo}.{way}"
+        return f"Doctor, le recuerdo salir en 15 minutos {plan.frase}."
     if notice == "aviso_hora":
-        return f"Doctor, ya es hora de salir: {plan.motivo}.{way}"
-    return f"Doctor, ya se tiene que ir, ya va tarde: {plan.motivo}.{way}"
+        return f"Doctor, ya es hora de salir {plan.frase}."
+    return f"Doctor, ya va tarde: salga ya {plan.frase}."
 
 
 def _start(event: Evento, zone: ZoneInfo) -> datetime | None:
@@ -164,7 +172,7 @@ class Avisos:
         token, project = await run_in_threadpool(self._token)
         body: dict[str, Any] = {
             "origin": {"location": {"latLng": {"latitude": origin[0], "longitude": origin[1]}}},
-            "destination": {"address": destination},
+            "destination": _waypoint(destination),
             "travelMode": "DRIVE",
             "routingPreference": "TRAFFIC_AWARE",
             "languageCode": "es-MX",
@@ -231,7 +239,7 @@ class Avisos:
             # «Consultorio» o «Cita en el hospital» se traducen a la dirección guardada.
             saved = resolve_place(places, event.lugar, event.titulo)
             if saved and not ("vuelo" in event.titulo.casefold() and event.lugar):
-                plan = Plan(plan.llegada, saved, plan.motivo)
+                plan = Plan(plan.llegada, saved, plan.frase)
             if plan.llegada - now > PRIMER_CALCULO:
                 continue
             info = tracked.setdefault(f"{event.id}@{event.inicio}", {})
@@ -254,7 +262,7 @@ class Avisos:
             if minutes is None:
                 # Sin lugar, sin ubicación o sin ruta: un solo aviso media hora antes.
                 if plan.llegada - now <= SIN_CAMINO_ANTES and not info.get("aviso_hora"):
-                    await self.speak(message_for("aviso_hora", plan, None))
+                    await self.speak(message_for("aviso_hora", plan))
                     info["aviso_hora"] = now.isoformat()
                     spoken.append(event.titulo)
                 continue
@@ -269,7 +277,7 @@ class Avisos:
                 if origin and here and distance_m((origin[0], origin[1]), here) > YA_SALIO_METROS:
                     info[notice] = "ya_salio"
                     continue
-            await self.speak(message_for(notice, plan, minutes))
+            await self.speak(message_for(notice, plan))
             for earlier, _ in AVISOS[: [n for n, _ in AVISOS].index(notice) + 1]:
                 info.setdefault(earlier, now.isoformat())
             if here and "origen" not in info:

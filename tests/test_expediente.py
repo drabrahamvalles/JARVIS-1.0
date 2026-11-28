@@ -50,8 +50,10 @@ async def test_tools_round_trip(tmp_path):
     context = ToolContext("America/Monterrey", "coordenadas", "Monterrey", store=store_at(tmp_path))
     saved = await recordar_dato("rutina", "Sale del hospital a las 15:00", context=context)
     assert saved["ok"] is True
-    assert (await guardar_lugar("Hospital", "Av. Madero 3000", context=context))["ok"] is True
-    assert (await guardar_lugar("Hospital", " ", context=context))["ok"] is False
+    assert (await guardar_lugar("Hospital", "Av. Madero 3000", False, context=context))["ok"]
+    assert (await guardar_lugar("Hospital", " ", False, context=context))["ok"] is False
+    # «Aquí es mi casa» sin ubicación del iPhone no se puede.
+    assert (await guardar_lugar("Casa", None, True, context=context))["ok"] is False
     everything = await consultar_expediente(context=context)
     assert everything["datos"][0]["texto"] == "Sale del hospital a las 15:00"
     assert everything["lugares"][0]["nombre"] == "Hospital"

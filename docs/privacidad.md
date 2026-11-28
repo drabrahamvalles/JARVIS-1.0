@@ -22,6 +22,9 @@ autor, el Dr. Abraham Valles. No es un servicio público ni tiene otros usuarios
 - **Ubicación aproximada** del iPhone, para la zona horaria, el clima y los avisos
   de salida. Se guarda solo la última, y con ella y el lugar del evento se le pide
   a Google Maps el tiempo de camino.
+- **Historial de ubicación.** Para aprender los lugares frecuentes, JARVIS guarda
+  la ubicación del iPhone unas cuantas veces al día durante 60 días y después la
+  borra sola. Solo se usa para los patrones y los avisos de salida.
 - **Expediente.** Lo que el usuario le pide recordar (rutinas, personas, lugares
   frecuentes) se guarda en Firestore y se le pasa al modelo en cada pregunta para
   personalizar las respuestas. Él puede consultarlo y borrar cualquier dato.
