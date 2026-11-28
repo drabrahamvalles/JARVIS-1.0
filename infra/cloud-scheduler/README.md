@@ -34,3 +34,10 @@ gcloud scheduler jobs describe jarvis-despertador --project='<PROYECTO>' --locat
 Se crea o actualiza con `infra/cloud-scheduler/programar-revision-correo.sh '<PROYECTO>' '<URL_CLOUD_RUN>'`.
 El script lee el token de Secret Manager sin imprimirlo. Si se rota `JARVIS_TOKEN`, hay que volver a
 correrlo. Cloud Scheduler da 3 trabajos gratis por cuenta de facturación; con este quedan 2.
+
+## Avisos de salida (desde el 27/11/2026)
+
+`infra/cloud-scheduler/programar-avisos.sh '<PROYECTO>' '<URL_CLOUD_RUN>'` cambia
+`jarvis-despertador` para que llame `POST /tareas/avisos` con el token, cada 10 minutos de
+4:00 a 23:50 en `America/Monterrey` (desde las 4 por los vuelos temprano). Sigue despertando al
+servidor. Si se rota `JARVIS_TOKEN`, hay que volver a correrlo.

@@ -19,7 +19,12 @@ autor, el Dr. Abraham Valles. No es un servicio público ni tiene otros usuarios
   esfuerzo para el briefing de la mañana y para preguntas como «¿cómo dormí?».
   No escribe nada en WHOOP. El token de acceso se guarda en Firestore porque
   WHOOP lo renueva en cada uso.
-- **Ubicación aproximada** del iPhone, para la zona horaria y el clima.
+- **Ubicación aproximada** del iPhone, para la zona horaria, el clima y los avisos
+  de salida. Se guarda solo la última, y con ella y el lugar del evento se le pide
+  a Google Maps el tiempo de camino.
+- **Avisos de voz.** Los avisos de salida son correos de JARVIS a la propia
+  cuenta del usuario («Aviso de JARVIS»), que un Atajo del iPhone lee en voz
+  alta. No salen a nadie más.
 
 ## Dónde se procesan
 

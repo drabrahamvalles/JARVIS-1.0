@@ -23,7 +23,9 @@ satélites de voz en el cuarto y el consultorio.
 - Todo endpoint, excepto /health, exige el encabezado Authorization: Bearer JARVIS_TOKEN.
 - Una herramienta por archivo en app/tools/.
 - Escribe pruebas en tests/ para cada herramienta y ejecútalas antes de dar algo por terminado.
-- Nada se envía a nombre del usuario sin su confirmación explícita.
+- Nada se envía a nombre del usuario sin su confirmación explícita. Excepción aprobada por él
+  (27/11/2026): los avisos de salida son correos de JARVIS a su propia cuenta para que el iPhone
+  los lea en voz alta; nunca van a terceros.
 - Nunca proceses datos identificables de pacientes. La revisión automática de correo salta los
   correos que parecen clínicos antes de mandar nada al modelo y solo avisa quién los envió.
 - Nunca crees un recurso con costo mensual fijo (instancias mínimas, bases de datos siempre

@@ -25,8 +25,8 @@ en pruebas.
 | 4.3 | Gmail: leer y enviar con confirmación | Validada (27/11/2026) |
 | 4.4 | Recordatorios por voz | Servidor listo, falta el Atajo |
 | 5 | WHOOP: recuperación y sueño en el briefing | Conectado y validado (27/11/2026); falta la espera en el Atajo BRIEFING |
-| 5.1 | Revisión de correo a las 6, 15 y 21 h que agenda sola | Construida (27/11/2026) |
-| 3 | Rutas y tráfico al subir al carro | Pendiente |
+| 5.1 | Revisión de correo a las 6, 15 y 21 h que agenda sola | Validada (27/11/2026) |
+| 3 | Avisos de salida en voz con tráfico real (Routes API) | Construida (27/11/2026); falta el Atajo de voz |
 | 6 | Voz propia, panel web, conversación con interrupción, "Hey Jarvis" en la Mac | Pendiente |
 | 7 | FRIDAY: agente en la Mac que ejecuta tareas | Pendiente |
 | 8 | WhatsApp con capturas y borradores | Pendiente |

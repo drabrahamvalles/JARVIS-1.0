@@ -207,6 +207,14 @@ class Gmail:
             raise GmailError(f"HTTP {response.status_code}")
         return str(response.json().get("id", ""))
 
+    async def own_address(self) -> str:
+        """Dirección de la cuenta conectada (para que JARVIS se mande sus avisos de voz)."""
+        profile = await self._get("profile")
+        address = str(profile.get("emailAddress") or "")
+        if "@" not in address:
+            raise GmailError("Perfil sin dirección")
+        return address
+
     async def search(self, query: str, zone_name: str, limit: int) -> list[dict[str, Any]]:
         zone = ZoneInfo(zone_name)
         found = await self._get("messages", {"q": query, "maxResults": limit})

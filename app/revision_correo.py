@@ -40,7 +40,7 @@ TRASLAPE = timedelta(minutes=10)
 # (pedidos, envíos, bancos).
 BUSQUEDA = (
     "in:inbox is:important -category:promotions -category:social -category:updates "
-    "-category:forums after:{epoch}"
+    '-category:forums -subject:"Aviso de JARVIS" after:{epoch}'
 )
 # Un correo que parece clínico nunca se manda al modelo: solo se le avisa al usuario.
 CLINICO = re.compile(

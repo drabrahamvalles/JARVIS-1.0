@@ -34,6 +34,10 @@ class Store(Protocol):
     def write_pending_email(self, pending: dict | None) -> None: ...
     def read_whoop_token(self) -> dict | None: ...
     def read_correo_revision(self) -> dict | None: ...
+    def read_avisos_salida(self) -> dict | None: ...
+    def write_avisos_salida(self, state: dict) -> None: ...
+    def read_ubicacion(self) -> dict | None: ...
+    def write_ubicacion(self, location: dict) -> None: ...
     def write_correo_revision(self, state: dict) -> None: ...
     def write_whoop_token(self, token: dict) -> None: ...
 
@@ -63,6 +67,8 @@ class LocalStore:
         self.email_path = user_path / "correo_pendiente.json"
         self.whoop_path = user_path / "whoop_token.json"
         self.revision_path = user_path / "revision_correo.json"
+        self.avisos_path = user_path / "avisos_salida.json"
+        self.ubicacion_path = user_path / "ubicacion.json"
 
     def _read_turns(self, now: datetime) -> list[dict]:
         try:
@@ -141,6 +147,29 @@ class LocalStore:
     def write_correo_revision(self, state: dict) -> None:
         timezone_state.write_json_atomically(
             self.revision_path, {"usuario_id": self.user_id, **state}
+        )
+
+    def _read_owned(self, path) -> dict | None:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return None
+        return data if isinstance(data, dict) and data.get("usuario_id") == self.user_id else None
+
+    def read_avisos_salida(self) -> dict | None:
+        return self._read_owned(self.avisos_path)
+
+    def write_avisos_salida(self, state: dict) -> None:
+        timezone_state.write_json_atomically(
+            self.avisos_path, {"usuario_id": self.user_id, **state}
+        )
+
+    def read_ubicacion(self) -> dict | None:
+        return self._read_owned(self.ubicacion_path)
+
+    def write_ubicacion(self, location: dict) -> None:
+        timezone_state.write_json_atomically(
+            self.ubicacion_path, {"usuario_id": self.user_id, **location}
         )
 
 
@@ -255,6 +284,27 @@ class FirestoreStore:
     def write_correo_revision(self, state: dict) -> None:
         reference = self._user.collection("estado").document("revision_correo")
         reference.set({"usuario_id": self.user_id, **state}, retry=RPC_RETRY, timeout=RPC_TIMEOUT)
+
+    def _read_state(self, name: str) -> dict | None:
+        reference = self._user.collection("estado").document(name)
+        data = reference.get(retry=RPC_RETRY, timeout=RPC_TIMEOUT).to_dict()
+        return data if data and data.get("usuario_id") == self.user_id else None
+
+    def _write_state(self, name: str, data: dict) -> None:
+        reference = self._user.collection("estado").document(name)
+        reference.set({"usuario_id": self.user_id, **data}, retry=RPC_RETRY, timeout=RPC_TIMEOUT)
+
+    def read_avisos_salida(self) -> dict | None:
+        return self._read_state("avisos_salida")
+
+    def write_avisos_salida(self, state: dict) -> None:
+        self._write_state("avisos_salida", state)
+
+    def read_ubicacion(self) -> dict | None:
+        return self._read_state("ubicacion")
+
+    def write_ubicacion(self, location: dict) -> None:
+        self._write_state("ubicacion", location)
 
 
 def build_store(env: dict[str, str]) -> Store:

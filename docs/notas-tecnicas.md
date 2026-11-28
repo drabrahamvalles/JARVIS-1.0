@@ -347,6 +347,39 @@ Los correos son de terceros: las instrucciones dicen que son datos, el modelo no
 tiene herramientas y lo único que puede salir de ahí es un evento validado por el
 servidor. Los títulos no llevan datos de pacientes.
 
+## Avisos de salida (fase 3)
+
+`app/avisos.py`, llamado por el despertador cada 10 minutos de 4:00 a 23:50
+(`POST /tareas/avisos`). Para cada evento con hora de las próximas 6 horas:
+
+1. **Hora de llegada.** La del evento. Si el título dice «vuelo», 2 h antes si
+   todos los aeropuertos del título están en `zonas_horarias_vuelos` (nacional) y
+   3 h antes si no (internacional). Destino: el lugar del evento o «Aeropuerto de
+   [ciudad]».
+2. **Camino.** Desde la última ubicación del iPhone (`/ask`, `/briefing` y
+   `/captura` la guardan en `usuarios/{id}/estado/ubicacion`; sirve 12 h). Se
+   calcula por primera vez 4 h antes de la llegada y se recalcula cada hora;
+   desde una hora antes de la salida, cada 15 minutos, con `departureTime` para
+   que Google prediga el tráfico de esa hora. Máximo 40 consultas al día.
+3. **Tres avisos** sobre la hora real de salida (llegada − camino):
+   - 20 min antes: «Doctor, le recomiendo salir en 15 minutos…» (5 de colchón).
+   - 5 min antes: «Doctor, ya es hora de salir…».
+   - A la hora real, solo si sigue a menos de 300 m de donde estaba en el primer
+     aviso: «Doctor, ya se tiene que ir, ya va tarde…».
+   Si el servidor empieza tarde, dice solo el aviso que toca. Si el tráfico
+   empeora, la hora de salida se adelanta y los avisos también.
+4. Sin lugar, sin ubicación o sin ruta: un solo aviso media hora antes.
+
+**Cómo habla.** El iPhone no deja que un servidor lo haga hablar. Cada aviso es
+un correo de JARVIS a la misma cuenta de Gmail (`own_address` lee el perfil) con
+el asunto «Aviso de JARVIS». Un Atajo con el disparador «Correo» (remitente: la
+cuenta, asunto: «Aviso de JARVIS») lo lee en voz alta. La revisión de correo
+excluye ese asunto. El Dr. Valles pidió este canal (27/11/2026): no es un envío a
+nombre suyo a terceros.
+
+Routes API se llama con la cuenta de servicio (OAuth y `X-Goog-User-Project`), sin
+clave de API; la cuenta necesita `roles/serviceusage.serviceUsageConsumer`.
+
 ## WHOOP (fase 5)
 
 `app/whoop.py` lee la API v2 de WHOOP (recuperación, sueño y ciclos) con un token

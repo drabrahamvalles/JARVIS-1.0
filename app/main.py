@@ -2,13 +2,16 @@ import asyncio
 import logging
 import secrets as secure
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from typing import Annotated
 
+import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI, RateLimitError
 from starlette.concurrency import run_in_threadpool
 
+from app.avisos import Avisos
 from app.brain import Brain, BrainError
 from app.briefing import Briefing, BriefingError
 from app.calendario import CalendarioError, CalendarioNoConfigurado
@@ -41,6 +44,21 @@ bearer = HTTPBearer(auto_error=False)
 WHOOP_PENDIENTE = (
     "WHOOP todavía está calculando su noche; en cuanto termine le doy su recuperación."
 )
+
+
+async def remember_location(context) -> None:
+    """Guarda la última ubicación del iPhone para calcular los avisos de salida."""
+    if context.store is None or context.lat is None or context.lon is None:
+        return
+    location = {
+        "lat": context.lat,
+        "lon": context.lon,
+        "en": datetime.now(UTC).isoformat(),
+    }
+    try:
+        await run_in_threadpool(context.store.write_ubicacion, location)
+    except Exception as exc:
+        logger.warning("storage_failed operation=location_write kind=%s", type(exc).__name__)
 
 
 async def append_email_notices(answer: str, context) -> str:
@@ -93,6 +111,12 @@ def create_app(
         app.state.briefing = None
         app.state.captura = None
         app.state.revisor = None
+        app.state.avisos = Avisos(
+            {
+                code: airport.alias[0]
+                for code, airport in app.state.config.zonas_horarias_vuelos.items()
+            }
+        )
         try:
             if app.state.secrets.openai_api_key:
                 client = AsyncOpenAI(
@@ -158,6 +182,7 @@ def create_app(
                 context = await run_in_threadpool(
                     request.app.state.resolver.resolve, payload, request.app.state.config
                 )
+                await remember_location(context)
                 answer = await brain.ask(payload, context)
             reminder = context.acciones[-1] if context.acciones else {}
             return AskResponse(
@@ -188,6 +213,7 @@ def create_app(
                 context = await run_in_threadpool(
                     request.app.state.resolver.resolve, payload, request.app.state.config
                 )
+                await remember_location(context)
                 answer, whoop = await asyncio.gather(
                     service.create(payload, context), whoop_summary(context)
                 )
@@ -220,6 +246,7 @@ def create_app(
                 context = await run_in_threadpool(
                     request.app.state.resolver.resolve, payload, request.app.state.config
                 )
+                await remember_location(context)
                 return await service.analyze(payload, context)
         except ImagenDemasiadoGrandeError:
             raise HTTPException(413, "La imagen supera el límite de 5 MB") from None
@@ -234,6 +261,25 @@ def create_app(
         except (APIStatusError, APIConnectionError, CapturaError) as exc:
             logger.warning("captura_failed kind=%s", type(exc).__name__)
             raise HTTPException(502, "No fue posible analizar la captura") from None
+
+    @application.post("/tareas/avisos", dependencies=[Depends(require_token)])
+    async def avisos(request: Request) -> dict:
+        """El despertador la llama cada 10 minutos: avisa cuándo salir a cada evento."""
+        service = request.app.state.avisos
+        context = await run_in_threadpool(
+            request.app.state.resolver.resolve, WhoopRequest(), request.app.state.config
+        )
+        if context.store is None:
+            raise HTTPException(503, "Sin almacenamiento")
+        zone, _ = active_timezone(context)
+        try:
+            async with asyncio.timeout(60):
+                return await service.run(context.store, zone)
+        except (CalendarioNoConfigurado, GmailNoConfigurado):
+            return {"hablados": []}
+        except (CalendarioError, GmailError, TimeoutError, httpx.HTTPError) as exc:
+            logger.warning("avisos_failed kind=%s", type(exc).__name__)
+            raise HTTPException(502, "No fue posible revisar los avisos") from None
 
     @application.post("/tareas/revisar-correo", dependencies=[Depends(require_token)])
     async def revisar_correo(request: Request) -> dict:
