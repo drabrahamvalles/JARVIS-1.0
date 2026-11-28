@@ -366,6 +366,21 @@ En cada `/ask` el servidor lee el expediente y lo agrega a las instrucciones del
 modelo. «¿Qué sabes de mí?» usa `consultar_expediente`; «olvida…», `olvidar_dato`.
 Nunca se guardan datos de pacientes ni contraseñas.
 
+## WhatsApp (fase 5.3)
+
+El lector de la Mac (`mac/whatsapp-lector`, ver su README) manda a
+`POST /whatsapp/mensajes` los mensajes nuevos que mencionan fecha u hora, con un poco
+de contexto. `app/revision_whatsapp.py`:
+
+1. Salta los id ya procesados (`estado/revision_whatsapp`, últimos 2000).
+2. Agrupa por chat. Si un chat trae algo que parece clínico (misma expresión que el
+   correo), no se manda al modelo y el briefing dice «En WhatsApp llegó un mensaje que
+   parece clínico; revíselo usted», sin el nombre del chat.
+3. Los demás chats van al modelo anónimos («Chat 1», «Dr. Valles» / «Otra persona»),
+   con la extracción estricta del correo y sus propias instrucciones. El servidor
+   valida y agenda igual que con el correo; los avisos llevan `origen: whatsapp` y el
+   briefing dice «De WhatsApp agregué a su calendario: …».
+
 ## Rutina: lugares aprendidos y preguntas por iniciativa propia (fase 5.4)
 
 `app/rutina.py` corre al final de cada `/tareas/avisos` y decide por la hora:

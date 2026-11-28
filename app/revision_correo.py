@@ -190,7 +190,11 @@ class RevisorCorreo:
         return {"revisados": len(messages), "clinicos": len(clinical), "agregados": added}
 
     async def _extract(
-        self, messages: list[dict[str, Any]], now: datetime, zone_name: str
+        self,
+        messages: list[dict[str, Any]],
+        now: datetime,
+        zone_name: str,
+        instructions: str | None = None,
     ) -> Extraccion:
         started_at = time.perf_counter()
         usage = TokenUsage()
@@ -212,7 +216,7 @@ class RevisorCorreo:
         try:
             response = await self.client.responses.parse(
                 model=self.config.modelo_captura,
-                instructions=INSTRUCCIONES,
+                instructions=instructions or INSTRUCCIONES,
                 input=[{"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
                 text_format=Extraccion,
                 reasoning={"mode": "standard", "effort": "low"},
@@ -299,22 +303,32 @@ def _spoken_when(value: str) -> str:
 
 def notice_sentence(notices: list[dict[str, str]]) -> str | None:
     """Oraciones que el servidor agrega al briefing: lo agendado y los correos clínicos."""
-    events = [item for item in notices if item.get("tipo") != "clinico"]
+    events = [item for item in notices if not item.get("tipo")]
     clinical = [item for item in notices if item.get("tipo") == "clinico"]
+    clinical_chats = [item for item in notices if item.get("tipo") == "clinico_whatsapp"]
     sentences = []
-    if events:
-        parts = [f"{item['titulo']} {_spoken_when(item['inicio'])}" for item in events[:5]]
-        extra = len(events) - len(parts)
+    for origin, label in (("correo", "De sus correos"), ("whatsapp", "De WhatsApp")):
+        group = [item for item in events if item.get("origen", "correo") == origin]
+        if not group:
+            continue
+        parts = [f"{item['titulo']} {_spoken_when(item['inicio'])}" for item in group[:5]]
+        extra = len(group) - len(parts)
         text = "; ".join(parts)
         if extra > 0:
             text += f" y {extra} más"
-        sentences.append(f"De sus correos agregué a su calendario: {text}.")
+        sentences.append(f"{label} agregué a su calendario: {text}.")
     if clinical:
         senders = list(dict.fromkeys(item["de"] for item in clinical))[:3]
         who = " y de ".join(senders) if len(senders) <= 2 else ", de ".join(senders)
         noun = "un correo clínico" if len(clinical) == 1 else f"{len(clinical)} correos clínicos"
         verb = "revíselo" if len(clinical) == 1 else "revíselos"
         sentences.append(f"Tiene {noun} de {who}; {verb} usted.")
+    if clinical_chats:
+        # En WhatsApp el nombre del chat puede ser el del paciente: no se dice.
+        count = len(clinical_chats)
+        noun = "un mensaje" if count == 1 else f"{count} mensajes"
+        verb = "parece clínico; revíselo" if count == 1 else "parecen clínicos; revíselos"
+        sentences.append(f"En WhatsApp llegó {noun} que {verb} usted.")
     return " ".join(sentences) or None
 
 

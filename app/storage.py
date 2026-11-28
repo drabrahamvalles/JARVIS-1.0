@@ -39,6 +39,8 @@ class Store(Protocol):
     def read_ubicacion(self) -> dict | None: ...
     def read_expediente(self) -> dict | None: ...
     def read_rutina(self) -> dict | None: ...
+    def read_revision_whatsapp(self) -> dict | None: ...
+    def write_revision_whatsapp(self, state: dict) -> None: ...
     def write_rutina(self, state: dict) -> None: ...
     def read_ubicaciones(self) -> dict | None: ...
     def write_ubicaciones(self, log: dict) -> None: ...
@@ -77,6 +79,7 @@ class LocalStore:
         self.ubicacion_path = user_path / "ubicacion.json"
         self.expediente_path = user_path / "expediente.json"
         self.rutina_path = user_path / "rutina.json"
+        self.whatsapp_path = user_path / "revision_whatsapp.json"
         self.ubicaciones_path = user_path / "ubicaciones.json"
 
     def _read_turns(self, now: datetime) -> list[dict]:
@@ -191,6 +194,14 @@ class LocalStore:
 
     def read_rutina(self) -> dict | None:
         return self._read_owned(self.rutina_path)
+
+    def read_revision_whatsapp(self) -> dict | None:
+        return self._read_owned(self.whatsapp_path)
+
+    def write_revision_whatsapp(self, state: dict) -> None:
+        timezone_state.write_json_atomically(
+            self.whatsapp_path, {"usuario_id": self.user_id, **state}
+        )
 
     def write_rutina(self, state: dict) -> None:
         timezone_state.write_json_atomically(
@@ -347,6 +358,12 @@ class FirestoreStore:
 
     def read_rutina(self) -> dict | None:
         return self._read_state("rutina")
+
+    def read_revision_whatsapp(self) -> dict | None:
+        return self._read_state("revision_whatsapp")
+
+    def write_revision_whatsapp(self, state: dict) -> None:
+        self._write_state("revision_whatsapp", state)
 
     def write_rutina(self, state: dict) -> None:
         self._write_state("rutina", state)

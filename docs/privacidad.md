@@ -22,6 +22,10 @@ autor, el Dr. Abraham Valles. No es un servicio público ni tiene otros usuarios
 - **Ubicación aproximada** del iPhone, para la zona horaria, el clima y los avisos
   de salida. Se guarda solo la última, y con ella y el lugar del evento se le pide
   a Google Maps el tiempo de camino.
+- **WhatsApp.** Un programa en una Mac del usuario lee el archivo local de WhatsApp
+  (sin conectarse a WhatsApp). Solo salen de la Mac los mensajes que mencionan fecha u
+  hora, con algo de contexto, y nunca los chats que él excluya. Al modelo le llegan sin
+  nombres de chat; si parecen clínicos, no le llegan.
 - **Historial de ubicación.** Para aprender los lugares frecuentes, JARVIS guarda
   la ubicación del iPhone unas cuantas veces al día durante 60 días y después la
   borra sola. Solo se usa para los patrones y los avisos de salida.

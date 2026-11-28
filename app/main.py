@@ -19,6 +19,7 @@ from app.context import TimezoneResolver, active_timezone
 from app.gmail import GmailError, GmailNoConfigurado
 from app.registry import ToolRegistry
 from app.revision_correo import RevisorCorreo, notice_sentence
+from app.revision_whatsapp import LoteWhatsApp, RevisorWhatsApp
 from app.rutina import Rutina, distance_m
 from app.schemas import (
     AskRequest,
@@ -277,6 +278,32 @@ def create_app(
         except (APIStatusError, APIConnectionError, CapturaError) as exc:
             logger.warning("captura_failed kind=%s", type(exc).__name__)
             raise HTTPException(502, "No fue posible analizar la captura") from None
+
+    @application.post("/whatsapp/mensajes", dependencies=[Depends(require_token)])
+    async def whatsapp_mensajes(payload: LoteWhatsApp, request: Request) -> dict:
+        """El lector de WhatsApp de la Mac manda aquí los mensajes nuevos con posibles citas."""
+        service = request.app.state.revisor
+        if service is None:
+            raise HTTPException(503, "OPENAI_API_KEY no configurada")
+        context = await run_in_threadpool(
+            request.app.state.resolver.resolve, WhoopRequest(), request.app.state.config
+        )
+        try:
+            async with asyncio.timeout(150):
+                return await RevisorWhatsApp(service).revisar(payload, context)
+        except CalendarioNoConfigurado:
+            raise HTTPException(503, "Calendar no está conectado") from None
+        except (
+            CalendarioError,
+            TimeoutError,
+            APIStatusError,
+            APIConnectionError,
+            APITimeoutError,
+            RateLimitError,
+            RuntimeError,
+        ) as exc:
+            logger.warning("whatsapp_failed kind=%s", type(exc).__name__)
+            raise HTTPException(502, "No fue posible revisar WhatsApp") from None
 
     @application.post("/ubicacion", dependencies=[Depends(require_token)])
     async def ubicacion(payload: WhoopRequest, request: Request) -> dict:

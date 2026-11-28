@@ -27,7 +27,7 @@ en pruebas.
 | 5 | WHOOP: recuperación y sueño en el briefing | Conectado y validado (27/11/2026); falta la espera en el Atajo BRIEFING |
 | 5.1 | Revisión de correo a las 6, 15 y 21 h que agenda sola | Validada (27/11/2026) |
 | 5.2 | Expediente: datos, lugares frecuentes y hábitos de sueño | Construida (27/11/2026) |
-| 5.3 | WhatsApp: lector en Mac siempre prendida | Pendiente (28/11/2026): revisar la Mac vieja |
+| 5.3 | WhatsApp: lector en Mac siempre prendida | Servidor y lector construidos (28/11/2026); falta instalarlo en la Mac vieja |
 | 5.4 | Aprender lugares y patrones por ubicación; preguntas por iniciativa propia (misa del domingo) | Construida (28/11/2026); faltan los Atajos de ubicación y de respuesta |
 | 3 | Avisos de salida en voz con tráfico real (Routes API) | Construida (27/11/2026); falta el Atajo de voz |
 | 6 | Voz propia, panel web, conversación con interrupción, "Hey Jarvis" en la Mac | Pendiente |
